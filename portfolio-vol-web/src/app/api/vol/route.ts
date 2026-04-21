@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { fetchAdjClose, type PriceSeries } from "@/lib/yahoo"
+import { fetchAdjClose, type PriceSeries } from "../../../lib/yahoo"
 import {
   alignPanels,
   componentVol,
@@ -7,7 +7,7 @@ import {
   logReturns,
   populationCovariance,
   portfolioVol,
-} from "@/lib/vol"
+} from "../../../lib/vol"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
