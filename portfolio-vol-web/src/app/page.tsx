@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { Header } from "@/components/Header"
-import { Footer } from "@/components/Footer"
-import RoundButton from "@/components/RoundButton"
+import { Header } from "../components/Header"
+import { Footer } from "../components/Footer"
+import RoundButton from "../components/RoundButton"
 
 type Result = {
   tickers: string[]
