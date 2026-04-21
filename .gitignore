@@ -23,6 +23,10 @@ wheels/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
+
+# Whitelist Next.js lib/ folders (not Python venv dirs)
+!portfolio-vol-web/src/lib/
+!portfolio-vol-web/src/lib/**
 *.egg
 MANIFEST
 
