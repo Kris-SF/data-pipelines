@@ -69,6 +69,41 @@ class AnalysisResult:
     wavg_daily_vol: float
     wavg_ann_vol: float
     diversification_ratio: float
+    implied_corr: float
+
+
+def implied_correlation(cov: pd.DataFrame, weights: pd.Series) -> float:
+    """
+    Realized implied average correlation (Bossu / CBOE ICJ formula).
+
+        ρ̄ = (σ_p² − Σᵢ wᵢ²σᵢ²) / ((Σᵢ wᵢσᵢ)² − Σᵢ wᵢ²σᵢ²)
+
+    Solve for the single ρ that, if applied to every off-diagonal pair,
+    would reproduce the portfolio's realized variance given its
+    component vols. Returns NaN if the portfolio is one-name (denom=0).
+    """
+    w = weights.loc[cov.columns].to_numpy()
+    sigmas = np.sqrt(np.maximum(np.diag(cov.to_numpy()), 0.0))
+    var_p = float(w @ cov.to_numpy() @ w)
+    sum_w2_var = float(np.sum((w * sigmas) ** 2))
+    sum_w_sigma_sq = float(np.sum(w * sigmas) ** 2)
+    denom = sum_w_sigma_sq - sum_w2_var
+    if denom <= 0:
+        return float("nan")
+    return (var_p - sum_w2_var) / denom
+
+
+def rolling_implied_correlation(
+    returns: pd.DataFrame, weights: pd.Series, *, window: int = 21
+) -> pd.Series:
+    """Rolling implied correlation over a trailing window of daily returns."""
+    rhos: list[float] = []
+    dates: list[pd.Timestamp] = []
+    for end_i in range(window, len(returns) + 1):
+        sub = returns.iloc[end_i - window : end_i]
+        rhos.append(implied_correlation(sub.cov(ddof=0), weights))
+        dates.append(returns.index[end_i - 1])
+    return pd.Series(rhos, index=pd.DatetimeIndex(dates), name="implied_corr")
 
 
 def run_portfolio_analysis(
@@ -78,6 +113,7 @@ def run_portfolio_analysis(
     end: str | pd.Timestamp | None = None,
     normalize: bool = False,
     show: bool = True,
+    rolling_corr_window: int = 21,
 ) -> AnalysisResult:
     """Fetch, compute, and render a full realized vol analysis."""
     portfolio = Portfolio.from_weights(weights, normalize=normalize)
@@ -99,6 +135,7 @@ def run_portfolio_analysis(
     wavg_daily = float((w * component_daily).sum())
     wavg_ann = wavg_daily * np.sqrt(TRADING_DAYS_PER_YEAR)
     diversification = wavg_daily / daily_vol if daily_vol > 0 else float("nan")
+    rho_hat = implied_correlation(cov, w)
 
     result = AnalysisResult(
         portfolio=portfolio,
@@ -112,6 +149,7 @@ def run_portfolio_analysis(
         wavg_daily_vol=wavg_daily,
         wavg_ann_vol=wavg_ann,
         diversification_ratio=diversification,
+        implied_corr=rho_hat,
     )
 
     if show:
@@ -120,6 +158,7 @@ def run_portfolio_analysis(
         _render_components_table(result)
         _render_equity_curve(result)
         _render_component_vol_bar(result)
+        _render_rolling_implied_corr(result, window=rolling_corr_window)
         _render_correlation_heatmap(result)
 
     return result
@@ -175,8 +214,9 @@ def _render_summary_card(r: AnalysisResult) -> None:
         {_tile("Wtd-Avg Component Vol (ann.)", f"{r.wavg_ann_vol*100:.2f}%")}
         {_tile("Diversification Ratio", f"{r.diversification_ratio:.3f}")}
       </div>
-      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
                   margin-top: 12px;">
+        {_tile("Realized Correlation", _fmt_corr(r.implied_corr))}
         {_tile("Portfolio Vol (daily)", f"{r.daily_vol*100:.4f}%")}
         {_tile("Sample", f"{len(r.returns)} days", sublabel=sample_range)}
       </div>
@@ -188,6 +228,12 @@ def _render_summary_card(r: AnalysisResult) -> None:
 def _portfolio_label(p: Portfolio) -> str:
     parts = [f"{t} {w*100:.1f}%" for t, w in p.weights.items()]
     return " &middot; ".join(parts)
+
+
+def _fmt_corr(v: float) -> str:
+    if np.isnan(v):
+        return "—"
+    return f"{v:.3f}"
 
 
 def _tile(label: str, value: str, sublabel: str | None = None) -> str:
@@ -313,6 +359,42 @@ def _render_component_vol_bar(r: AnalysisResult) -> None:
     ax.grid(axis="y", visible=False)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
+    plt.tight_layout()
+    plt.show()
+
+
+def _render_rolling_implied_corr(r: AnalysisResult, *, window: int) -> None:
+    if len(r.returns) < window + 2 or len(r.portfolio) < 2:
+        return  # sample too short or single-name portfolio
+
+    series = rolling_implied_correlation(
+        r.returns, r.portfolio.weights, window=window
+    )
+
+    fig, ax = plt.subplots(figsize=(10, 3.6))
+    ax.fill_between(
+        series.index, 0, series.values, color=INDIGO_600, alpha=0.10, linewidth=0
+    )
+    ax.plot(series.index, series.values, color=INDIGO_600, linewidth=2)
+
+    if not np.isnan(r.implied_corr):
+        ax.axhline(
+            r.implied_corr,
+            color=GRAY_500,
+            linewidth=1,
+            linestyle="--",
+            label=f"Full-sample: {r.implied_corr:.2f}",
+        )
+        ax.legend(loc="best")
+
+    ax.set_title(f"Rolling Realized Correlation  ·  {window}d window")
+    ax.set_ylabel("ρ̄")
+    lo = min(-0.05, float(np.nanmin(series.values)) - 0.05)
+    hi = max(1.02, float(np.nanmax(series.values)) + 0.05)
+    ax.set_ylim(lo, hi)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    ax.margins(x=0)
     plt.tight_layout()
     plt.show()
 
