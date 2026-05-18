@@ -32,10 +32,9 @@ import numpy as np
 import pandas as pd
 from IPython.display import HTML, display
 
-from portfolio_vol import Portfolio, fetch_returns
+from data import fetch_daily_returns
 
-# Shared moontower palette (kept independent of analysis.py so this
-# module is self-contained — no cross-imports).
+# Moontower palette — self-contained so this module has no cross-folder deps.
 INDIGO_600 = "#4F46E5"
 BLUE_500 = "#3B82F6"
 GREEN_500 = "#22C55E"
@@ -192,10 +191,8 @@ def run_hurst_analysis(
     if not tickers:
         raise ValueError("tickers list is empty")
 
-    # Equal-weighted portfolio just to reuse the validated fetcher.
-    equal_w = {t: 1.0 / len(tickers) for t in tickers}
-    portfolio = Portfolio.from_weights(equal_w)
-    returns = fetch_returns(portfolio, start=start, end=end)
+    returns = fetch_daily_returns(tickers, start=start, end=end)
+    fetched_tickers = list(returns.columns)
 
     Ts = _resolve_T_values(len(returns), T_values)
     if len(Ts) < 2:
@@ -205,14 +202,14 @@ def run_hurst_analysis(
         )
 
     per_ticker: dict[str, TickerHurst] = {}
-    for t in portfolio.tickers:
+    for t in fetched_tickers:
         fit = hurst_exponent(returns[t].to_numpy(), T_values=Ts)
         per_ticker[t] = TickerHurst(ticker=t, H=fit.H, fit=fit)
 
     rolling_df = pd.DataFrame(index=pd.DatetimeIndex([]))
     if len(returns) >= rolling_window + 2:
         cols = {}
-        for t in portfolio.tickers:
+        for t in fetched_tickers:
             cols[t] = rolling_hurst(
                 returns[t], window=rolling_window, T_values=Ts
             )
