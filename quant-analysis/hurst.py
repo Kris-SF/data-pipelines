@@ -18,6 +18,8 @@ Usage (Jupyter / VS Code notebook):
         tickers=["SPY", "QQQ", "TLT"],
         start="2020-01-01",
         end="2025-01-01",
+        compare_methods=True,    # runs A/B/C side-by-side at 252d and 126d,
+                                 # with iid-Gaussian calibration + verdict
     )
 """
 
@@ -119,7 +121,6 @@ def _resolve_T_values(n: int, T_values: Sequence[int] | None) -> list[int]:
 class HurstFit:
     H: float
     intercept: float
-    r_squared: float  # coefficient of determination of the log-log fit
     rs_table: pd.DataFrame  # columns: T, R/S, sqrt(T), log2(T), log2(R/S), n_chunks
 
 
@@ -167,7 +168,6 @@ def hurst_exponent(
         return HurstFit(
             H=float("nan"),
             intercept=float("nan"),
-            r_squared=float("nan"),
             rs_table=pd.DataFrame(columns=empty_cols),
         )
 
@@ -179,19 +179,9 @@ def hurst_exponent(
 
     if method == "C":
         # sqrt(n_chunks) weighting — np.polyfit's `w` is interpreted as 1/sigma.
-        weights = np.sqrt(n_arr)
-        H, intercept = np.polyfit(log_T, log_RS, 1, w=weights)
+        H, intercept = np.polyfit(log_T, log_RS, 1, w=np.sqrt(n_arr))
     else:
-        weights = np.ones_like(log_T)
         H, intercept = np.polyfit(log_T, log_RS, 1)
-
-    # Weighted R² — reduces to standard R² when weights are uniform.
-    pred = intercept + H * log_T
-    w2 = weights ** 2
-    y_bar = float(np.sum(w2 * log_RS) / np.sum(w2))
-    ss_res = float(np.sum(w2 * (log_RS - pred) ** 2))
-    ss_tot = float(np.sum(w2 * (log_RS - y_bar) ** 2))
-    r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0 else float("nan")
 
     table = pd.DataFrame(
         {
@@ -203,12 +193,7 @@ def hurst_exponent(
             "n_chunks": n_arr.astype(int),
         }
     )
-    return HurstFit(
-        H=float(H),
-        intercept=float(intercept),
-        r_squared=float(r_squared),
-        rs_table=table,
-    )
+    return HurstFit(H=float(H), intercept=float(intercept), rs_table=table)
 
 
 def rolling_hurst(
@@ -253,6 +238,9 @@ class HurstAnalysisResult:
         ).sort_values()
 
 
+DEFAULT_COMPARISON_WINDOWS: tuple[int, ...] = (252, 126)
+
+
 def run_hurst_analysis(
     tickers: Iterable[str],
     *,
@@ -262,6 +250,8 @@ def run_hurst_analysis(
     rolling_window: int = DEFAULT_ROLLING_WINDOW,
     show: bool = True,
     compare_methods: bool = False,
+    comparison_windows: Sequence[int] = DEFAULT_COMPARISON_WINDOWS,
+    calibration_sims: int = 500,
 ) -> HurstAnalysisResult:
     """Fetch returns, compute Hurst per ticker, render moontower-styled plots."""
     tickers = list(tickers)
@@ -308,10 +298,11 @@ def run_hurst_analysis(
         _render_H_bar(result)
         _render_rolling_H(result)
         if compare_methods:
-            render_method_comparison(
+            _render_method_comparison_multi_window(
                 returns=returns,
                 tickers=fetched_tickers,
-                window=rolling_window,
+                windows=comparison_windows,
+                calibration_sims=calibration_sims,
             )
 
     return result
@@ -399,13 +390,7 @@ def _render_summary_card(r: HurstAnalysisResult) -> None:
     for t, info in r.per_ticker.items():
         regime, color = _regime(info.H)
         value = "—" if np.isnan(info.H) else f"{info.H:.3f}"
-        r2_txt = (
-            "R² —" if np.isnan(info.fit.r_squared)
-            else f"R² {info.fit.r_squared:.3f}"
-        )
-        tiles.append(
-            _tile(t, value, sublabel=f"{regime} · {r2_txt}", value_color=color)
-        )
+        tiles.append(_tile(t, value, sublabel=regime, value_color=color))
 
     grid = (
         f'<div style="display: grid; grid-template-columns: repeat({cols}, 1fr); '
@@ -527,13 +512,12 @@ def _render_loglog_fit(r: HurstAnalysisResult) -> None:
         ax.scatter(x, y, color=color, s=40, zorder=3, edgecolor="white", linewidth=1)
         x_line = np.array([x.min(), x.max()])
         y_line = info.fit.intercept + info.H * x_line
-        r2_txt = "—" if np.isnan(info.fit.r_squared) else f"{info.fit.r_squared:.3f}"
         ax.plot(
             x_line,
             y_line,
             color=color,
             linewidth=2,
-            label=f"{t}  ·  H = {info.H:.3f}  ·  R² = {r2_txt}",
+            label=f"{t}  ·  H = {info.H:.3f}",
         )
 
     ax.set_title("R/S vs T  (log–log)  ·  slope = H")
@@ -646,28 +630,193 @@ def _render_rolling_disagreement_table(df: pd.DataFrame) -> None:
     display(styled)
 
 
+def _render_method_comparison_multi_window(
+    *,
+    returns: pd.DataFrame,
+    tickers: Sequence[str],
+    windows: Sequence[int],
+    calibration_sims: int,
+) -> None:
+    """
+    Drive render_method_comparison for each window, then print a combined
+    verdict line that names the best method at each window.
+    """
+    per_window_calib: list[tuple[int, pd.DataFrame]] = []
+    for win in windows:
+        _render_window_section_header(win)
+        calib = calibrate_methods(window=win, n_sims=calibration_sims)
+        render_method_comparison(
+            returns=returns,
+            tickers=tickers,
+            window=win,
+            calibration_sims=calibration_sims,
+            _precomputed_calibration=calib,
+        )
+        per_window_calib.append((win, calib))
+
+    # Combined verdict across all windows at the bottom for quick scanning.
+    if len(windows) > 1:
+        display(HTML(
+            f'<div style="font-size: 12px; text-transform: uppercase; '
+            f'letter-spacing: 0.08em; color: {GRAY_900}; font-weight: 700; '
+            f'padding-top: 18px; border-top: 1px solid {GRAY_200}; '
+            f'margin-top: 18px;">Combined verdict</div>'
+        ))
+        _render_verdict(per_window_calib)
+
+
+def calibrate_methods(
+    *,
+    window: int = DEFAULT_ROLLING_WINDOW,
+    n_sims: int = 500,
+    seed: int | None = 0,
+    methods: Sequence[str] = ("A", "B", "C"),
+) -> pd.DataFrame:
+    """
+    Calibrate the three methods on iid Gaussian data (true H = 0.5).
+
+    Generates `n_sims` independent return series of length `window` from
+    N(0, 1), runs each method, then summarizes the empirical distribution of
+    Ĥ around the true value 0.5:
+
+      bias  = mean(Ĥ) − 0.5
+      stdev = standard deviation of Ĥ across sims
+      RMSE  = sqrt(bias² + stdev²)   ← single ranking number
+
+    Returns a DataFrame indexed by method.
+    """
+    rng = np.random.default_rng(seed)
+    samples = rng.standard_normal((n_sims, window))
+
+    h_by_method: dict[str, np.ndarray] = {}
+    for m in methods:
+        Hs = np.empty(n_sims, dtype=float)
+        for i in range(n_sims):
+            Hs[i] = hurst_exponent(samples[i], method=m).H
+        h_by_method[m] = Hs
+
+    rows = []
+    for m in methods:
+        Hs = h_by_method[m]
+        valid = Hs[np.isfinite(Hs)]
+        if valid.size == 0:
+            rows.append(
+                {"method": m, "mean Ĥ": np.nan, "bias": np.nan,
+                 "stdev": np.nan, "RMSE": np.nan}
+            )
+            continue
+        mean_h = float(valid.mean())
+        bias = mean_h - 0.5
+        stdev = float(valid.std(ddof=1)) if valid.size > 1 else float("nan")
+        rmse = float(np.sqrt(bias ** 2 + stdev ** 2))
+        rows.append(
+            {"method": m, "mean Ĥ": mean_h, "bias": bias,
+             "stdev": stdev, "RMSE": rmse}
+        )
+
+    return pd.DataFrame(rows).set_index("method")
+
+
+def _render_calibration_table(df: pd.DataFrame, window: int, n_sims: int) -> None:
+    if df.empty:
+        return
+    fmt = {"mean Ĥ": "{:+.4f}", "bias": "{:+.4f}", "stdev": "{:.4f}", "RMSE": "{:.4f}"}
+    # Bold the lowest-RMSE row.
+    rmse = df["RMSE"]
+    winner = rmse.idxmin() if rmse.notna().any() else None
+
+    def _highlight(row: pd.Series) -> list[str]:
+        if winner is not None and row.name == winner:
+            return [f"background: {GRAY_100}; font-weight: 700;"] * len(row)
+        return [""] * len(row)
+
+    styled = (
+        df.style.format(fmt, na_rep="—")
+        .apply(_highlight, axis=1)
+        .set_caption(
+            f"Calibration vs iid Gaussian (true H = 0.5)  ·  "
+            f"window {window}d  ·  {n_sims} sims  ·  lowest RMSE wins"
+        )
+        .set_table_styles(_COMPARISON_TABLE_STYLES)
+    )
+    display(styled)
+
+
+def _render_verdict(per_window_results: list[tuple[int, pd.DataFrame]]) -> None:
+    """One-line summary naming the lowest-RMSE method per window."""
+    bits: list[str] = []
+    for win, df in per_window_results:
+        if df.empty or df["RMSE"].isna().all():
+            continue
+        best = df["RMSE"].idxmin()
+        rmse = df.loc[best, "RMSE"]
+        bias = df.loc[best, "bias"]
+        bits.append(
+            f"<b>{win}d:</b> Method {best} wins "
+            f"(RMSE = {rmse:.4f}, bias = {bias:+.4f})"
+        )
+    if not bits:
+        return
+    html = (
+        f'<div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; '
+        f'padding: 8px 0 16px 0; color: {GRAY_900}; font-size: 13px;">'
+        f'<span style="display: inline-block; font-size: 11px; '
+        f'text-transform: uppercase; letter-spacing: 0.08em; '
+        f'color: {INDIGO_600}; font-weight: 700; margin-right: 12px;">Verdict</span>'
+        f"{' &nbsp;·&nbsp; '.join(bits)}"
+        f"</div>"
+    )
+    display(HTML(html))
+
+
+def _render_window_section_header(window: int) -> None:
+    html = (
+        f'<div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; '
+        f'padding: 18px 0 4px 0; border-top: 1px solid {GRAY_200}; '
+        f'margin-top: 12px;">'
+        f'<div style="font-size: 11px; text-transform: uppercase; '
+        f'letter-spacing: 0.08em; color: {INDIGO_600}; font-weight: 700;">'
+        f'Window comparison</div>'
+        f'<div style="font-size: 18px; font-weight: 700; color: {GRAY_900}; '
+        f'margin-top: 4px;">{window}-day rolling window</div></div>'
+    )
+    display(HTML(html))
+
+
 def render_method_comparison(
     returns: pd.DataFrame,
     tickers: Sequence[str],
     *,
     window: int = DEFAULT_ROLLING_WINDOW,
     methods: Sequence[str] = ("A", "B", "C"),
+    calibration_sims: int = 500,
+    _precomputed_calibration: pd.DataFrame | None = None,
 ) -> dict[str, pd.DataFrame]:
     """
-    Compare the three estimator methods for each ticker.
+    Compare the three estimator methods for each ticker at one window.
 
     Renders, in order:
-      1. A static-H comparison table — full-sample H and R² per (ticker, method),
-         plus a per-ticker disagreement stat (max H - min H).
-      2. A stacked rolling-H plot — one subplot per ticker, one line per method.
+      1. Calibration table — iid-Gaussian bias / stdev / RMSE at this window.
+      2. Full-sample H by method, plus per-ticker spread (max-min H).
+      3. Rolling H disagreement summary (mean / max spread, frac > 0.05).
+      4. Stacked rolling-H plot — one subplot per ticker, one line per method.
 
-    Returns a dict {ticker -> DataFrame of rolling H, one column per method} so
-    callers can do their own follow-up analysis.
+    Returns a dict {ticker -> DataFrame of rolling H, one column per method}.
     """
     _apply_mpl_style()
     tickers = [t for t in tickers if t in returns.columns]
     if not tickers:
         return {}
+
+    calib = (
+        _precomputed_calibration
+        if _precomputed_calibration is not None
+        else calibrate_methods(
+            window=window, n_sims=calibration_sims, methods=methods
+        )
+    )
+    _render_calibration_table(calib, window=window, n_sims=calibration_sims)
+    _render_verdict([(window, calib)])
 
     # Static (full-sample) fit per (ticker, method) — gives the comparison table.
     static_rows: list[dict] = []
@@ -678,7 +827,6 @@ def render_method_comparison(
         for m in methods:
             fit = hurst_exponent(arr, method=m)
             row[f"H_{m}"] = fit.H
-            row[f"R²_{m}"] = fit.r_squared
             if np.isfinite(fit.H):
                 h_values.append(fit.H)
         row["spread (max-min H)"] = (
