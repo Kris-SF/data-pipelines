@@ -122,7 +122,8 @@ def _resolve_T_values(n: int, T_values: Sequence[int] | None) -> list[int]:
 class HurstFit:
     H: float
     intercept: float
-    rs_table: pd.DataFrame  # columns: T, R/S, sqrt(T), log2(T), log2(R/S)
+    r_squared: float  # coefficient of determination of the log-log fit
+    rs_table: pd.DataFrame  # columns: T, R/S, sqrt(T), log2(T), log2(R/S), n_chunks
 
 
 def _resolve_method_T_values(
@@ -169,6 +170,7 @@ def hurst_exponent(
         return HurstFit(
             H=float("nan"),
             intercept=float("nan"),
+            r_squared=float("nan"),
             rs_table=pd.DataFrame(columns=empty_cols),
         )
 
@@ -183,7 +185,16 @@ def hurst_exponent(
         weights = np.sqrt(n_arr)
         H, intercept = np.polyfit(log_T, log_RS, 1, w=weights)
     else:
+        weights = np.ones_like(log_T)
         H, intercept = np.polyfit(log_T, log_RS, 1)
+
+    # Weighted R² — reduces to standard R² when weights are uniform.
+    pred = intercept + H * log_T
+    w2 = weights ** 2
+    y_bar = float(np.sum(w2 * log_RS) / np.sum(w2))
+    ss_res = float(np.sum(w2 * (log_RS - pred) ** 2))
+    ss_tot = float(np.sum(w2 * (log_RS - y_bar) ** 2))
+    r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0 else float("nan")
 
     table = pd.DataFrame(
         {
@@ -195,7 +206,12 @@ def hurst_exponent(
             "n_chunks": n_arr.astype(int),
         }
     )
-    return HurstFit(H=float(H), intercept=float(intercept), rs_table=table)
+    return HurstFit(
+        H=float(H),
+        intercept=float(intercept),
+        r_squared=float(r_squared),
+        rs_table=table,
+    )
 
 
 def rolling_hurst(
@@ -386,7 +402,13 @@ def _render_summary_card(r: HurstAnalysisResult) -> None:
     for t, info in r.per_ticker.items():
         regime, color = _regime(info.H)
         value = "—" if np.isnan(info.H) else f"{info.H:.3f}"
-        tiles.append(_tile(t, value, sublabel=regime, value_color=color))
+        r2_txt = (
+            "R² —" if np.isnan(info.fit.r_squared)
+            else f"R² {info.fit.r_squared:.3f}"
+        )
+        tiles.append(
+            _tile(t, value, sublabel=f"{regime} · {r2_txt}", value_color=color)
+        )
 
     grid = (
         f'<div style="display: grid; grid-template-columns: repeat({cols}, 1fr); '
@@ -508,12 +530,13 @@ def _render_loglog_fit(r: HurstAnalysisResult) -> None:
         ax.scatter(x, y, color=color, s=40, zorder=3, edgecolor="white", linewidth=1)
         x_line = np.array([x.min(), x.max()])
         y_line = info.fit.intercept + info.H * x_line
+        r2_txt = "—" if np.isnan(info.fit.r_squared) else f"{info.fit.r_squared:.3f}"
         ax.plot(
             x_line,
             y_line,
             color=color,
             linewidth=2,
-            label=f"{t}  ·  H = {info.H:.3f}",
+            label=f"{t}  ·  H = {info.H:.3f}  ·  R² = {r2_txt}",
         )
 
     ax.set_title("R/S vs T  (log–log)  ·  slope = H")
@@ -562,6 +585,70 @@ def _render_H_bar(r: HurstAnalysisResult) -> None:
     plt.show()
 
 
+_COMPARISON_TABLE_STYLES = [
+    {
+        "selector": "caption",
+        "props": (
+            f"caption-side: top; text-align: left; font-weight: 700; "
+            f"text-transform: uppercase; letter-spacing: 0.06em; "
+            f"color: {GRAY_900}; padding: 12px 0 8px 0; font-size: 13px;"
+        ),
+    },
+    {
+        "selector": "th.col_heading, th.row_heading, th.index_name",
+        "props": (
+            f"background: {GRAY_100}; color: {GRAY_700}; "
+            f"border-bottom: 1px solid {GRAY_300}; padding: 8px 12px; "
+            "text-align: right; text-transform: uppercase; "
+            "letter-spacing: 0.04em; font-size: 11px;"
+        ),
+    },
+    {
+        "selector": "td",
+        "props": (
+            f"border-bottom: 1px solid {GRAY_100}; padding: 8px 12px; "
+            "font-family: ui-monospace, SFMono-Regular, Menlo, monospace; "
+            "text-align: right;"
+        ),
+    },
+    {"selector": "", "props": "border-collapse: collapse;"},
+]
+
+
+def _render_method_comparison_table(
+    static_df: pd.DataFrame, methods: Sequence[str]
+) -> None:
+    if static_df.empty:
+        return
+    fmt = {col: "{:.3f}" for col in static_df.columns}
+    styled = (
+        static_df.style.format(fmt, na_rep="—")
+        .set_caption(
+            "Full-sample H by method  ·  spread = max-min H across methods"
+        )
+        .set_table_styles(_COMPARISON_TABLE_STYLES)
+    )
+    display(styled)
+
+
+def _render_rolling_disagreement_table(df: pd.DataFrame) -> None:
+    if df.empty:
+        return
+    fmt = {
+        "mean spread": "{:.3f}",
+        "max spread": "{:.3f}",
+        "frac > 0.05": "{:.0%}",
+    }
+    styled = (
+        df.style.format(fmt, na_rep="—")
+        .set_caption(
+            "Rolling H disagreement across methods  ·  spread = max-min over the window"
+        )
+        .set_table_styles(_COMPARISON_TABLE_STYLES)
+    )
+    display(styled)
+
+
 def render_method_comparison(
     returns: pd.DataFrame,
     tickers: Sequence[str],
@@ -570,17 +657,39 @@ def render_method_comparison(
     methods: Sequence[str] = ("A", "B", "C"),
 ) -> dict[str, pd.DataFrame]:
     """
-    Plot rolling H for each ticker across the three estimator methods.
+    Compare the three estimator methods for each ticker.
 
-    Returns a dict {ticker -> DataFrame with one column per method} so callers
-    can inspect the underlying numbers (handy for "average disagreement"
-    follow-ups). One subplot per ticker, stacked vertically; a single legend
-    at the top names the methods.
+    Renders, in order:
+      1. A static-H comparison table — full-sample H and R² per (ticker, method),
+         plus a per-ticker disagreement stat (max H - min H).
+      2. A stacked rolling-H plot — one subplot per ticker, one line per method.
+
+    Returns a dict {ticker -> DataFrame of rolling H, one column per method} so
+    callers can do their own follow-up analysis.
     """
     _apply_mpl_style()
     tickers = [t for t in tickers if t in returns.columns]
     if not tickers:
         return {}
+
+    # Static (full-sample) fit per (ticker, method) — gives the comparison table.
+    static_rows: list[dict] = []
+    for t in tickers:
+        arr = returns[t].to_numpy()
+        row: dict = {"ticker": t}
+        h_values: list[float] = []
+        for m in methods:
+            fit = hurst_exponent(arr, method=m)
+            row[f"H_{m}"] = fit.H
+            row[f"R²_{m}"] = fit.r_squared
+            if np.isfinite(fit.H):
+                h_values.append(fit.H)
+        row["spread (max-min H)"] = (
+            float(max(h_values) - min(h_values)) if len(h_values) >= 2 else float("nan")
+        )
+        static_rows.append(row)
+    static_df = pd.DataFrame(static_rows).set_index("ticker")
+    _render_method_comparison_table(static_df, methods)
 
     per_ticker: dict[str, pd.DataFrame] = {}
     for t in tickers:
@@ -588,6 +697,23 @@ def render_method_comparison(
             m: rolling_hurst(returns[t], window=window, method=m) for m in methods
         }
         per_ticker[t] = pd.DataFrame(cols)
+
+    # Rolling disagreement summary — how much daylight between methods over time?
+    rolling_rows: list[dict] = []
+    for t in tickers:
+        df = per_ticker[t]
+        spread = df.max(axis=1) - df.min(axis=1)
+        rolling_rows.append(
+            {
+                "ticker": t,
+                "mean spread": float(spread.mean()) if len(spread) else float("nan"),
+                "max spread": float(spread.max()) if len(spread) else float("nan"),
+                "frac > 0.05": (
+                    float((spread > 0.05).mean()) if len(spread) else float("nan")
+                ),
+            }
+        )
+    _render_rolling_disagreement_table(pd.DataFrame(rolling_rows).set_index("ticker"))
 
     n = len(tickers)
     fig, axes = plt.subplots(
