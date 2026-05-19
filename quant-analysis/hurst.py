@@ -96,19 +96,16 @@ def _rs_at_T_with_count(returns: np.ndarray, T: int) -> tuple[float, int]:
     if n_chunks == 0:
         return float("nan"), 0
 
-    rs_vals: list[float] = []
-    for k in range(n_chunks):
-        chunk = returns[k * T : (k + 1) * T]
-        s = float(np.std(chunk, ddof=0))
-        if s <= 0:
-            continue
-        cum = np.cumsum(chunk - chunk.mean())
-        r = float(cum.max() - cum.min())
-        rs_vals.append(r / s)
-
-    if not rs_vals:
+    # Reshape into (n_chunks, T) and compute R/S per chunk in one shot.
+    chunks = np.asarray(returns[: n_chunks * T], dtype=float).reshape(n_chunks, T)
+    s = chunks.std(axis=1, ddof=0)
+    cum = np.cumsum(chunks - chunks.mean(axis=1, keepdims=True), axis=1)
+    r = cum.max(axis=1) - cum.min(axis=1)
+    valid = s > 0
+    if not valid.any():
         return float("nan"), 0
-    return float(np.mean(rs_vals)), len(rs_vals)
+    rs_vals = r[valid] / s[valid]
+    return float(rs_vals.mean()), int(valid.sum())
 
 
 def _resolve_T_values(n: int, T_values: Sequence[int] | None) -> list[int]:
