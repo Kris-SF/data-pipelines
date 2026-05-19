@@ -53,6 +53,25 @@ _LINE_PALETTE = [INDIGO_600, BLUE_500, GREEN_500, ORANGE_600, VIOLET_600, GRAY_7
 DEFAULT_T_CANDIDATES = [5, 10, 20, 40, 80, 160, 320]
 DEFAULT_ROLLING_WINDOW = 252
 
+# Method-specific T schedules. "A" is the historical default (wide spread).
+# "B" is the narrow-spread variant; "C" reuses A's T's but applies inverse-
+# variance-style weighting (sqrt of chunk count) in the regression.
+METHOD_T_VALUES: dict[str, list[int]] = {
+    "A": [5, 10, 20, 40, 80],
+    "B": [5, 10, 15, 20, 25],
+    "C": [5, 10, 20, 40, 80],
+}
+METHOD_LABELS: dict[str, str] = {
+    "A": "A · wide T, unweighted",
+    "B": "B · narrow T, unweighted",
+    "C": "C · wide T, chunk-weighted",
+}
+METHOD_COLORS: dict[str, str] = {
+    "A": INDIGO_600,
+    "B": ORANGE_600,
+    "C": GREEN_500,
+}
+
 
 # -------------------------------------------------------------------
 # Math
@@ -66,10 +85,16 @@ def rs_at_T(returns: np.ndarray, T: int) -> float:
     S = std dev of the original returns, R/S = R / S. Skips chunks with
     zero variance (constant returns) since R/S is undefined there.
     """
+    rs, _ = _rs_at_T_with_count(returns, T)
+    return rs
+
+
+def _rs_at_T_with_count(returns: np.ndarray, T: int) -> tuple[float, int]:
+    """Like rs_at_T, but also returns the number of usable chunks."""
     n = len(returns)
     n_chunks = n // T
     if n_chunks == 0:
-        return float("nan")
+        return float("nan"), 0
 
     rs_vals: list[float] = []
     for k in range(n_chunks):
@@ -82,8 +107,8 @@ def rs_at_T(returns: np.ndarray, T: int) -> float:
         rs_vals.append(r / s)
 
     if not rs_vals:
-        return float("nan")
-    return float(np.mean(rs_vals))
+        return float("nan"), 0
+    return float(np.mean(rs_vals)), len(rs_vals)
 
 
 def _resolve_T_values(n: int, T_values: Sequence[int] | None) -> list[int]:
@@ -100,29 +125,65 @@ class HurstFit:
     rs_table: pd.DataFrame  # columns: T, R/S, sqrt(T), log2(T), log2(R/S)
 
 
+def _resolve_method_T_values(
+    n: int,
+    method: str,
+    T_values: Sequence[int] | None,
+) -> list[int]:
+    """Pick T's for a method; explicit T_values override the method default."""
+    if T_values is not None:
+        return _resolve_T_values(n, T_values)
+    if method not in METHOD_T_VALUES:
+        raise ValueError(f"unknown method {method!r}; expected one of A, B, C")
+    return _resolve_T_values(n, METHOD_T_VALUES[method])
+
+
 def hurst_exponent(
     returns: pd.Series | np.ndarray,
     T_values: Sequence[int] | None = None,
+    *,
+    method: str = "A",
 ) -> HurstFit:
-    """Estimate H by fitting log₂(R/S) ~ H · log₂(T) on the supplied T's."""
+    """
+    Estimate H by fitting log₂(R/S) ~ H · log₂(T).
+
+    method:
+      "A" — wide T = [5, 10, 20, 40, 80], unweighted regression (default).
+      "B" — narrow T = [5, 10, 15, 20, 25], unweighted regression.
+      "C" — same T as A, weighted regression with weight = sqrt(n_chunks(T))
+            (inverse-variance flavor — long-T points carry fewer samples).
+
+    Explicit T_values overrides the method's default T schedule.
+    """
     arr = np.asarray(returns, dtype=float)
     arr = arr[np.isfinite(arr)]
-    Ts = _resolve_T_values(len(arr), T_values)
-    rows: list[tuple[int, float]] = []
+    Ts = _resolve_method_T_values(len(arr), method, T_values)
+    rows: list[tuple[int, float, int]] = []
     for T in Ts:
-        rs = rs_at_T(arr, T)
-        if np.isfinite(rs) and rs > 0:
-            rows.append((T, rs))
+        rs, n_chunks = _rs_at_T_with_count(arr, T)
+        if np.isfinite(rs) and rs > 0 and n_chunks > 0:
+            rows.append((T, rs, n_chunks))
 
+    empty_cols = ["T", "R/S", "sqrt(T)", "log2(T)", "log2(R/S)", "n_chunks"]
     if len(rows) < 2:
-        empty = pd.DataFrame(columns=["T", "R/S", "sqrt(T)", "log2(T)", "log2(R/S)"])
-        return HurstFit(H=float("nan"), intercept=float("nan"), rs_table=empty)
+        return HurstFit(
+            H=float("nan"),
+            intercept=float("nan"),
+            rs_table=pd.DataFrame(columns=empty_cols),
+        )
 
-    T_arr = np.array([t for t, _ in rows])
-    rs_arr = np.array([rs for _, rs in rows])
+    T_arr = np.array([t for t, _, _ in rows])
+    rs_arr = np.array([rs for _, rs, _ in rows])
+    n_arr = np.array([n for _, _, n in rows], dtype=float)
     log_T = np.log2(T_arr)
     log_RS = np.log2(rs_arr)
-    H, intercept = np.polyfit(log_T, log_RS, 1)
+
+    if method == "C":
+        # sqrt(n_chunks) weighting — np.polyfit's `w` is interpreted as 1/sigma.
+        weights = np.sqrt(n_arr)
+        H, intercept = np.polyfit(log_T, log_RS, 1, w=weights)
+    else:
+        H, intercept = np.polyfit(log_T, log_RS, 1)
 
     table = pd.DataFrame(
         {
@@ -131,6 +192,7 @@ def hurst_exponent(
             "sqrt(T)": np.sqrt(T_arr),
             "log2(T)": log_T,
             "log2(R/S)": log_RS,
+            "n_chunks": n_arr.astype(int),
         }
     )
     return HurstFit(H=float(H), intercept=float(intercept), rs_table=table)
@@ -141,13 +203,14 @@ def rolling_hurst(
     *,
     window: int = DEFAULT_ROLLING_WINDOW,
     T_values: Sequence[int] | None = None,
+    method: str = "A",
 ) -> pd.Series:
     """Rolling H on a trailing window of daily returns."""
     Hs: list[float] = []
     dates: list[pd.Timestamp] = []
     for end_i in range(window, len(returns) + 1):
         sub = returns.iloc[end_i - window : end_i].to_numpy()
-        Hs.append(hurst_exponent(sub, T_values=T_values).H)
+        Hs.append(hurst_exponent(sub, T_values=T_values, method=method).H)
         dates.append(returns.index[end_i - 1])
     return pd.Series(Hs, index=pd.DatetimeIndex(dates), name="H")
 
@@ -185,6 +248,7 @@ def run_hurst_analysis(
     T_values: Sequence[int] | None = None,
     rolling_window: int = DEFAULT_ROLLING_WINDOW,
     show: bool = True,
+    compare_methods: bool = False,
 ) -> HurstAnalysisResult:
     """Fetch returns, compute Hurst per ticker, render moontower-styled plots."""
     tickers = list(tickers)
@@ -230,6 +294,12 @@ def run_hurst_analysis(
         _render_loglog_fit(result)
         _render_H_bar(result)
         _render_rolling_H(result)
+        if compare_methods:
+            render_method_comparison(
+                returns=returns,
+                tickers=fetched_tickers,
+                window=rolling_window,
+            )
 
     return result
 
@@ -490,6 +560,84 @@ def _render_H_bar(r: HurstAnalysisResult) -> None:
         ax.spines[side].set_visible(False)
     plt.tight_layout()
     plt.show()
+
+
+def render_method_comparison(
+    returns: pd.DataFrame,
+    tickers: Sequence[str],
+    *,
+    window: int = DEFAULT_ROLLING_WINDOW,
+    methods: Sequence[str] = ("A", "B", "C"),
+) -> dict[str, pd.DataFrame]:
+    """
+    Plot rolling H for each ticker across the three estimator methods.
+
+    Returns a dict {ticker -> DataFrame with one column per method} so callers
+    can inspect the underlying numbers (handy for "average disagreement"
+    follow-ups). One subplot per ticker, stacked vertically; a single legend
+    at the top names the methods.
+    """
+    _apply_mpl_style()
+    tickers = [t for t in tickers if t in returns.columns]
+    if not tickers:
+        return {}
+
+    per_ticker: dict[str, pd.DataFrame] = {}
+    for t in tickers:
+        cols = {
+            m: rolling_hurst(returns[t], window=window, method=m) for m in methods
+        }
+        per_ticker[t] = pd.DataFrame(cols)
+
+    n = len(tickers)
+    fig, axes = plt.subplots(
+        n, 1, figsize=(10, max(2.4, 2.2 * n)), sharex=True, squeeze=False
+    )
+    axes = axes[:, 0]
+
+    for ax, t in zip(axes, tickers):
+        df = per_ticker[t]
+        for m in methods:
+            if m not in df.columns:
+                continue
+            ax.plot(
+                df.index,
+                df[m].values,
+                color=METHOD_COLORS.get(m, GRAY_700),
+                linewidth=1.5,
+                label=METHOD_LABELS.get(m, m),
+            )
+        ax.axhline(0.5, color=GRAY_500, linewidth=1, linestyle="--")
+        ax.set_title(t, loc="left")
+        ax.set_ylabel("H")
+        vals = df.to_numpy().ravel()
+        if np.isfinite(vals).any():
+            lo = min(0.25, float(np.nanmin(vals)) - 0.05)
+            hi = max(0.75, float(np.nanmax(vals)) + 0.05)
+            ax.set_ylim(lo, hi)
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+        ax.margins(x=0)
+
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        loc="upper center",
+        ncol=len(labels),
+        bbox_to_anchor=(0.5, 1.0),
+        frameon=False,
+    )
+    fig.suptitle(
+        f"Rolling Hurst — method comparison  ·  {window}d window",
+        y=1.04,
+        fontsize=12,
+        fontweight="bold",
+        color=GRAY_900,
+    )
+    plt.tight_layout(rect=(0, 0, 1, 0.97))
+    plt.show()
+    return per_ticker
 
 
 def _render_rolling_H(r: HurstAnalysisResult) -> None:
