@@ -115,15 +115,17 @@ def _rs_at_T_with_count(returns: np.ndarray, T: int) -> tuple[float, int]:
 @lru_cache(maxsize=None)
 def expected_rs_iid(T: int) -> float:
     """
-    Anis-Lloyd (1976) exact expected R/S under iid Gaussian at finite T:
+    Anis-Lloyd (1976) closed-form expected R/S(T) under a random walk:
 
         E[R/S(T)] = ((T-0.5)/T) · Γ((T-1)/2)/(√π · Γ(T/2)) · Σ_{i=1}^{T-1} √((T-i)/i)
 
-    This is the "what R/S would be for a random walk" baseline. Dividing the
-    observed R/S by this value before regressing absorbs the finite-T
-    deviation from pure √T scaling, recovering an unbiased H. (Same shape of
-    fix as Bessel's n→n-1 correction for sample variance — a known
-    finite-sample correction to an asymptotic estimator.)
+    This is the random-walk baseline shown at each T in the worked R/S table.
+    Same shape of fix as Bessel's n→n-1 in sample variance: a finite-sample
+    correction to an asymptotic estimator.
+
+    NOTE: this analytical baseline is shown for reference but is NOT what the
+    final H correction subtracts — see `_empirical_bias` for the operational
+    Monte-Carlo correction and why we don't use this point-wise (Jensen).
 
     Asymptotic limit: E[R/S(T)] / √T → √(π/2) ≈ 1.253.
     """
@@ -169,12 +171,27 @@ def _empirical_bias(
     n_sims: int = 1000, seed: int = 0,
 ) -> float:
     """
-    Mean Ĥ_raw - 0.5 under a random walk for this (method, T_schedule).
+    Bias offset to subtract from H_raw so a random walk maps to H = 0.5.
 
-    Operationally this is the "Anis-Lloyd + Jensen" correction: instead of the
-    analytical AL slope (which leaves ~3-5% residual bias because
-    E[log R/S] ≠ log E[R/S]), we estimate the expected naïve H by simulation.
-    Cached so each unique (method, T_schedule) is paid for once.
+    Two routes exist to compute this; both are called "Anis-Lloyd correction"
+    in the literature, but they differ in whether they handle Jensen's
+    inequality on log R/S:
+
+    1. ANALYTICAL ROUTE (closed-form, NOT used here):
+       Take the slope of log₂(E[R/S(T)]) vs log₂(T) using the AL formula in
+       `expected_rs_iid`. Subtract that from the raw slope, add 0.5 back.
+       Deterministic, no randomness — but leaves a residual ~0.04 bias on a
+       random walk because log(E[R/S]) ≠ E[log R/S] (log doesn't commute with
+       expectation; the AL slope is computed on log-of-expected, the
+       regression operates on average-of-log).
+
+    2. EMPIRICAL ROUTE (Monte Carlo, what this function does):
+       Simulate `n_sims` random walks of length 4·max(T_schedule), fit naïve
+       H on each, take the mean as the bias offset. Because the simulation
+       runs the exact same regression we use in practice, Jensen is handled
+       implicitly. Hits H ≈ 0.50 on a random walk.
+
+    Cached so each unique (method, T_schedule) pays for the simulation once.
     """
     if len(T_schedule) < 2:
         return 0.0
@@ -810,9 +827,12 @@ def render_calibration_convergence(
     x = df.index.to_numpy()
 
     series = [
-        ("raw", INDIGO_600, "Raw R/S, fixed T = [5,10,20,40,80] — structural bias"),
-        ("adapt", ORANGE_600, "Raw R/S, adaptive T = [5, …, window/4] — slow decay"),
-        ("al", GREEN_500, "Anis-Lloyd corrected R/S, fixed T — flat at 0.5"),
+        ("raw", INDIGO_600,
+         "Raw R/S, fixed T = [5,10,20,40,80] — structural bias"),
+        ("adapt", ORANGE_600,
+         "Raw R/S, adaptive T = [5, …, window/4] — slow decay"),
+        ("al", GREEN_500,
+         "Bias-corrected (Anis-Lloyd via MC offset) — flat at 0.5"),
     ]
     for prefix, color, label in series:
         mean = df[f"{prefix}_mean"]
@@ -891,9 +911,9 @@ def calibrate_methods(
                 "mean Ĥ (raw)": mean_raw,
                 "bias (raw)": bias_raw,
                 "RMSE (raw)": rmse_raw,
-                "mean Ĥ (AL)": mean_al,
-                "bias (AL)": bias_al,
-                "RMSE (AL)": rmse_al,
+                "mean Ĥ (corrected)": mean_al,
+                "bias (corrected)": bias_al,
+                "RMSE (corrected)": rmse_al,
             }
         )
 
@@ -905,11 +925,12 @@ def _render_calibration_table(df: pd.DataFrame, window: int, n_sims: int) -> Non
         return
     fmt = {
         "mean Ĥ (raw)": "{:+.4f}", "bias (raw)": "{:+.4f}", "RMSE (raw)": "{:.4f}",
-        "mean Ĥ (AL)": "{:+.4f}", "bias (AL)": "{:+.4f}", "RMSE (AL)": "{:.4f}",
+        "mean Ĥ (corrected)": "{:+.4f}", "bias (corrected)": "{:+.4f}",
+        "RMSE (corrected)": "{:.4f}",
     }
-    # Bold the lowest AL-RMSE row (the proper post-correction ranking).
     winner = (
-        df["RMSE (AL)"].idxmin() if df["RMSE (AL)"].notna().any() else None
+        df["RMSE (corrected)"].idxmin()
+        if df["RMSE (corrected)"].notna().any() else None
     )
 
     def _highlight(row: pd.Series) -> list[str]:
@@ -923,7 +944,7 @@ def _render_calibration_table(df: pd.DataFrame, window: int, n_sims: int) -> Non
         .set_caption(
             f"Calibration vs random walk (true H = 0.5)  ·  "
             f"window {window}d  ·  {n_sims} sims  ·  "
-            f"AL = Anis-Lloyd bias-corrected"
+            f"correction = Anis-Lloyd via Monte-Carlo bias offset"
         )
         .set_table_styles(_COMPARISON_TABLE_STYLES)
     )
@@ -931,19 +952,19 @@ def _render_calibration_table(df: pd.DataFrame, window: int, n_sims: int) -> Non
 
 
 def _render_verdict(per_window_results: list[tuple[int, pd.DataFrame]]) -> None:
-    """One-line summary naming the lowest AL-RMSE method per window."""
+    """One-line summary naming the lowest corrected-RMSE method per window."""
     bits: list[str] = []
     for win, df in per_window_results:
-        if df.empty or df["RMSE (AL)"].isna().all():
+        if df.empty or df["RMSE (corrected)"].isna().all():
             continue
-        best = df["RMSE (AL)"].idxmin()
-        rmse = df.loc[best, "RMSE (AL)"]
-        bias = df.loc[best, "bias (AL)"]
+        best = df["RMSE (corrected)"].idxmin()
+        rmse = df.loc[best, "RMSE (corrected)"]
+        bias = df.loc[best, "bias (corrected)"]
         raw_bias = df.loc[best, "bias (raw)"]
         bits.append(
             f"<b>{win}d:</b> Method {best} wins "
-            f"(AL-RMSE = {rmse:.4f}, AL-bias = {bias:+.4f}; "
-            f"raw bias would have been {raw_bias:+.4f})"
+            f"(corrected RMSE = {rmse:.4f}, corrected bias = {bias:+.4f}; "
+            f"uncorrected bias would have been {raw_bias:+.4f})"
         )
     if not bits:
         return
