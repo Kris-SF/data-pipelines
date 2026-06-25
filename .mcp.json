@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "moontower": {
+      "type": "http",
+      "url": "https://api.moontower.ai/mcp",
+      "headers": {
+        "X-API-Key": "${MOONTOWER_API_KEY}"
+      }
+    }
+  }
+}
