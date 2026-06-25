@@ -32,6 +32,24 @@ resp = call("price", ticker="SPY", format="csv", raw=True)
 
 `call()` handles repeated list params, dropping `None`, surfacing API error bodies. `to_df()` unwraps the `{"data": [...]}` envelope.
 
+## MCP server
+
+Moontower also exposes an MCP server at `https://api.moontower.ai/mcp` (auth via the
+`X-API-Key` header), surfacing the endpoints below as tools (`get_prices`,
+`get_implied_volatility`, …). Register it with Claude Code, referencing the env var so
+the key never lands in config:
+
+```bash
+export MOONTOWER_API_KEY=...   # same key as the Python client; set it in your env, don't inline it
+claude mcp add --scope local --transport http moontower https://api.moontower.ai/mcp \
+  --header 'X-API-Key: ${MOONTOWER_API_KEY}'
+```
+
+The `${MOONTOWER_API_KEY}` placeholder is expanded from the environment at load time, so
+`MOONTOWER_API_KEY` must be set wherever Claude Code starts (e.g. your Claude Code
+environment secrets). Verify with `claude mcp get moontower` (expect `✓ Connected`). Note
+the MCP tools take the ticker arg as `tickers` (plural).
+
 ## Endpoints
 
 | Endpoint | Notes |
