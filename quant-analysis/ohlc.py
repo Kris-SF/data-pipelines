@@ -1,9 +1,9 @@
 """
 OHLC fetcher for the overnight-variance study.
 
-Unlike the close-only fetcher in ../quant-analysis/data.py, this one keeps
-BOTH Open and Close — the overnight gap r_co = ln(open_t / close_{t-1})
-needs the official open.
+Unlike the close-only fetcher in this folder's data.py (fetch_daily_returns),
+this one keeps BOTH Open and Close — the overnight gap
+r_co = ln(open_t / close_{t-1}) needs the official open.
 
 Uses auto_adjust=True on purpose: back-adjusting for splits AND dividends
 means an ex-dividend price drop does NOT masquerade as an overnight gap.
@@ -11,7 +11,7 @@ That matters a lot here — dividend payers (TLT pays monthly, plus SPY/GLD/
 FXE) would otherwise inject fake overnight variance on every ex-div date.
 
 Usage:
-    from data import fetch_ohlc
+    from ohlc import fetch_ohlc
     px = fetch_ohlc(["SPY", "USO"], start="2021-01-01", end="2024-01-01")
     px["open"], px["close"]   # two aligned DataFrames, one column per ticker
 """
