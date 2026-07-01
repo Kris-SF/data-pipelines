@@ -33,7 +33,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from data import fetch_ohlc
+from ohlc import fetch_ohlc
 
 
 # ---------------------------------------------------------------- core math
