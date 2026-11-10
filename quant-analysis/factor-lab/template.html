@@ -1,0 +1,624 @@
+<title>Factor Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Lexend:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column of numbered lessons, each a live instrument; sticky control strip sets the market hedge used everywhere. */
+:root{
+  --bg:#f8fafc; --surface:#ffffff; --surface-2:#f1f3f9; --ink:#0f172a; --ink-2:#475569; --muted:#64748b;
+  --line:rgba(15,23,42,.10); --grid:rgba(15,23,42,.07);
+  --purple:#5a63ef; --rose:#c0567c; --amber:#b07d12; --neutral:#64748b;
+  --pos:#15803d; --neg:#b91c1c;
+  --f-display:'Lexend',ui-sans-serif,system-ui,sans-serif;
+  --f-body:'Inter',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#05060a; --surface:#0f1218; --surface-2:#161a23; --ink:#f1f5f9; --ink-2:#cbd5e1; --muted:#94a3b8;
+  --line:rgba(255,255,255,.10); --grid:rgba(255,255,255,.07);
+  --purple:#7d85ff; --rose:#d76c93; --amber:#b0801c; --neutral:#8a94a6; --pos:#4ade80; --neg:#f87171; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#05060a; --surface:#0f1218; --surface-2:#161a23; --ink:#f1f5f9; --ink-2:#cbd5e1; --muted:#94a3b8;
+  --line:rgba(255,255,255,.10); --grid:rgba(255,255,255,.07);
+  --purple:#7d85ff; --rose:#d76c93; --amber:#b0801c; --neutral:#8a94a6; --pos:#4ade80; --neg:#f87171; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);letter-spacing:-.02em;text-wrap:balance;margin:0}
+p{margin:0}
+.mono,.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+a{color:var(--purple)}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--purple);outline-offset:2px}
+
+/* header */
+.top{padding-block:20px 0;display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}
+.brand{font-family:var(--f-display);font-weight:500;color:var(--ink);font-size:16px;letter-spacing:-.01em}
+.brand sup{color:var(--purple);font-size:.8em}
+.hero{padding-block:40px 28px;display:grid;gap:16px}
+.hero h1{font-weight:300;font-size:clamp(40px,7vw,68px);line-height:1.02}
+.hero h1 em{font-style:normal;color:var(--purple)}
+.lede{font-size:18px;color:var(--ink-2);max-width:62ch}
+.formula{font-family:var(--f-mono);font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;max-width:760px}
+.formula b{font-weight:500}
+.formula .m{color:var(--amber)} .formula .f{color:var(--purple)}
+.formula small{color:var(--muted);font-family:var(--f-body);font-size:12.5px;flex-basis:100%}
+
+/* sticky control strip */
+.strip{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.strip .wrap{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;padding-block:10px}
+.strip .lab{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+@media (max-width:640px){.strip .psub{display:none}}
+.strip .asof{margin-left:auto;font-size:12.5px;color:var(--muted)}
+.seg{display:inline-flex;background:var(--surface-2);border-radius:999px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:transparent;border-radius:999px;padding:4px 11px;font-size:13px;cursor:pointer;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12),0 0 0 1px var(--line)}
+.seg button:hover{color:var(--ink)}
+select{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:5px 8px;font-size:13.5px;max-width:100%}
+
+/* try chips */
+.try{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.try .lab{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-right:4px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer;transition:border-color .15s,transform .15s}
+.chip:hover{border-color:var(--purple);transform:translateY(-1px)}
+
+/* sections */
+section.lesson{padding-block:44px 8px;display:grid;gap:18px;scroll-margin-top:64px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;color:var(--purple);letter-spacing:.04em}
+.lesson h2{font-weight:400;font-size:clamp(26px,3.6vw,36px);line-height:1.12}
+.lesson .intro{color:var(--ink-2);max-width:68ch}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;display:grid;gap:14px;min-width:0}
+.controls{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;font-size:13.5px;color:var(--ink-2)}
+.controls label{display:inline-flex;gap:8px;align-items:center}
+.grid2{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:16px}
+@media (max-width:820px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.ptitle{font-size:13px;font-weight:600;color:var(--ink)}
+.psub{font-size:12.5px;color:var(--muted)}
+.chart{width:100%;min-width:0;position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.stat{background:var(--surface-2);border-radius:12px;padding:10px 12px;display:grid;gap:2px}
+.stat .k{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.stat .v{font-family:var(--f-mono);font-size:20px;font-variant-numeric:tabular-nums}
+.stat .h{font-size:12px;color:var(--muted)}
+.callout{border-left:3px solid var(--purple);padding:4px 0 4px 14px;color:var(--ink-2);max-width:72ch}
+.callout b{color:var(--ink);font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--ink-2)}
+.legend i{display:inline-block;width:16px;height:0;border-top:2px solid;vertical-align:middle;margin-right:6px}
+.legend i.dash{border-top-style:dashed}
+
+/* table */
+.tablewrap{overflow-x:auto;margin:0 -4px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:760px}
+th{font-weight:500;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:right;padding:8px 8px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;user-select:none}
+th:first-child,th:nth-child(2){text-align:left}
+th[aria-sort] ::after{content:""}
+th.sorted{color:var(--ink)}
+td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td:first-child,td:nth-child(2){text-align:left}
+td:nth-child(2){font-family:var(--f-body);color:var(--ink-2)}
+tr.grp td{font-family:var(--f-body);font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding-top:14px;border-bottom:0}
+tbody tr.row{cursor:pointer}
+tbody tr.row:hover{background:var(--surface-2)}
+.pos{color:var(--pos)} .neg{color:var(--neg)}
+.zpill{display:inline-block;min-width:52px;border-radius:999px;padding:1px 8px;text-align:center}
+.zhot{background:color-mix(in srgb,var(--rose) 22%,transparent)}
+.zwarm{background:color-mix(in srgb,var(--amber) 18%,transparent)}
+
+/* movers */
+.movers{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.mover{background:var(--surface-2);border:1px solid transparent;border-radius:12px;padding:10px 12px;cursor:pointer;display:grid;gap:4px;text-align:left}
+.mover:hover{border-color:var(--purple)}
+.mover .pr{font-weight:600;font-size:13.5px}
+.mover .pr span{color:var(--muted);font-weight:400}
+.mover .vals{font-family:var(--f-mono);font-size:12.5px;color:var(--ink-2)}
+.mover .d{font-family:var(--f-mono);font-size:13px}
+
+/* primer */
+.primer{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:grid;gap:6px;align-content:start}
+.card h3{font-size:16px;font-weight:500}
+.card p{color:var(--ink-2);font-size:14px}
+input[type=range]{width:min(420px,100%);accent-color:var(--purple)}
+#tip{position:fixed;pointer-events:none;z-index:50;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12.5px;box-shadow:0 10px 30px rgba(0,0,0,.18);min-width:140px;max-width:280px}
+#tip .t{font-weight:600;margin-bottom:4px}
+#tip .r{display:flex;justify-content:space-between;gap:12px;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+#tip .r span:first-child{font-family:var(--f-body);color:var(--ink-2)}
+#tip .sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:middle}
+footer{padding-block:48px 64px;color:var(--muted);font-size:13px;display:grid;gap:8px;max-width:80ch}
+.next{display:grid;gap:8px}
+.next li{color:var(--ink-2)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap top"><span class="brand">moontower<sup>σ</sup></span><span>/</span><span>Cockpit</span><span>/</span><span>Factor Lab</span></div>
+
+<header class="wrap hero">
+  <h1>Factor <em>Lab</em></h1>
+  <p class="lede">Every ETF's daily move is part market, part something else. Take the market out and what's left is the <b>factor</b>: momentum, value, a sector, a country. This lab lets you strip the market out of 35 ETFs, watch which factors are working, and see how their correlations shift over short and long lookbacks.</p>
+  <div class="formula" aria-label="Decomposition formula">
+    <span><b>r<sub>ETF</sub></b></span><span>=</span><span class="m"><b>β × r<sub>SPY</sub></b></span><span>+</span><span class="f"><b>residual</b></span>
+    <small>β (beta) is how many dollars of SPY move with each dollar of the ETF, measured over a trailing window. The residual is the factor return: what the ETF did beyond what its beta to the market predicted.</small>
+  </div>
+  <div class="try" id="try"><span class="lab">Try this</span></div>
+</header>
+
+<div class="strip"><div class="wrap">
+  <span class="lab">Beta window</span>
+  <div class="seg" id="hedgeSeg" role="group" aria-label="Beta window"></div>
+  <span class="psub">Trailing window used to measure each ETF's beta to SPY. Every residual on this page uses it.</span>
+  <span class="asof" id="asof"></span>
+</div></div>
+
+<main class="wrap">
+
+<section class="lesson" id="decompose">
+  <div class="eyebrow">01 · Take the market out</div>
+  <h2>Split one ETF into market and factor</h2>
+  <p class="intro">Each dot is one day: SPY's return across, the ETF's return up. The slope of the fitted line is beta. The vertical gap between a dot and the line is that day's residual. Add the residuals up and you get the factor's own track record, with the market's ups and downs removed.</p>
+  <div class="panel">
+    <div class="controls">
+      <label>ETF <select id="exTicker"></select></label>
+      <label>Show <span class="seg" id="exRange"></span></label>
+    </div>
+    <div class="stats" id="exStats"></div>
+    <div class="grid2">
+      <div class="chart-col" style="display:grid;gap:6px;min-width:0">
+        <div><div class="ptitle" id="scTitle"></div><div class="psub">Daily returns over the beta window. Rose ring marks the latest day.</div></div>
+        <div class="chart" id="scatter"></div>
+      </div>
+      <div style="display:grid;gap:6px;min-width:0">
+        <div><div class="ptitle">Cumulative return, split into parts</div><div class="psub">Market part plus factor part equals the ETF's total. The dashed line is the shortcut "ETF minus SPY".</div></div>
+        <div class="chart" id="cum"></div>
+        <div class="legend" id="cumLegend"></div>
+      </div>
+    </div>
+    <p class="callout" id="exNote"></p>
+  </div>
+</section>
+
+<section class="lesson" id="scoreboard">
+  <div class="eyebrow">02 · Track them</div>
+  <h2>Factor scoreboard</h2>
+  <p class="intro">The return of each ETF after removing its market beta, so the numbers show the factor alone. <b>Today z</b> scales the latest residual by its own recent volatility: ±2 is a big day for that factor, ±3 is rare. Click a column to sort, or a row to open it in lessons 01 and 04.</p>
+  <div class="panel">
+    <div class="tablewrap"><table id="board"><thead></thead><tbody></tbody></table></div>
+  </div>
+</section>
+
+<section class="lesson" id="heatmap">
+  <div class="eyebrow">03 · What moves together</div>
+  <h2>Correlation map</h2>
+  <p class="intro">Switch to raw returns and nearly everything glows, because the market drives most of the move. Switch to residuals and the real groupings appear: which factors are secretly the same bet, and which ones diversify each other. Slide the date to see how the map changed through time.</p>
+  <div class="panel">
+    <div class="controls">
+      <span class="seg" id="hmMode"></span>
+      <label>Lookback <span class="seg" id="hmWin"></span></label>
+      <label>Universe <select id="hmSet"></select></label>
+    </div>
+    <div class="controls"><label for="hmDate">As of</label><input type="range" id="hmDate"><span class="num" id="hmDateLab"></span></div>
+    <div class="chart" id="hm"></div>
+    <div class="legend" id="hmLegend"></div>
+  </div>
+</section>
+
+<section class="lesson" id="lookbacks">
+  <div class="eyebrow">04 · Short vs long lookbacks</div>
+  <h2>Is the relationship changing, or is it noise?</h2>
+  <p class="intro">A correlation always comes from a window of past days. A short window (21 days, about a month) reacts fast but is noisy. A long window (252 days, about a year) is steady but slow to notice change. When the short line leaves the long line and stays away, the relationship is probably shifting. When it snaps back, it was noise. Flat-topped steps are one extreme day (the Nov 6, 2024 election rally, the Apr 9, 2025 tariff pause) entering the window, holding the number up for exactly that many days, then dropping out.</p>
+  <div class="panel">
+    <div class="controls">
+      <label>A <select id="pA"></select></label>
+      <label>B <select id="pB"></select></label>
+      <span class="seg" id="pSrc"></span>
+    </div>
+    <div class="stats" id="pStats"></div>
+    <div class="chart" id="pair"></div>
+    <div class="legend" id="pairLegend"></div>
+    <p class="callout" id="pNote"></p>
+  </div>
+  <div class="panel">
+    <div><div class="ptitle">Biggest breaks right now</div><div class="psub">Style, theme and sector pairs where the 21-day residual correlation sits furthest from its 252-day level. Click one to chart it.</div></div>
+    <div class="movers" id="movers"></div>
+  </div>
+</section>
+
+<section class="lesson" id="dispersion">
+  <div class="eyebrow">05 · The regime</div>
+  <h2>Is everything moving as one?</h2>
+  <p class="intro">Average all the pairwise correlations inside a group and you get one number for how much the group moves together. High means one big trade: stock picking is hard and diversification is thin. Low means dispersion: the pieces are going their own ways. On raw returns this is the classic "correlation regime". On residuals it tells you whether sector or factor bets are crowding into one trade.</p>
+  <div class="panel">
+    <div class="controls">
+      <span class="seg" id="dSrc"></span>
+      <label>Lookback <span class="seg" id="dWin"></span></label>
+    </div>
+    <div class="chart" id="disp"></div>
+    <div class="legend" id="dispLegend"></div>
+    <p class="callout" id="dNote"></p>
+  </div>
+</section>
+
+<section class="lesson" id="primer">
+  <div class="eyebrow">06 · Field notes</div>
+  <h2>What to keep in mind</h2>
+  <div class="primer">
+    <div class="card"><h3>Why not just subtract SPY?</h3><p>"MTUM minus SPY" assumes a beta of exactly 1. Low-vol and dividend funds run nearer 0.7, small caps and semis well above 1. The leftover market exposure leaks into every spread, so naive factor spreads all look correlated with each other. Lesson 01 shows the gap.</p></div>
+    <div class="card"><h3>ETFs are rough proxies</h3><p>Academic factors like Fama-French are long-short portfolios. These ETFs are long-only, so even after removing beta they carry some sector tilt. MTUM in particular rotates its sector bets as winners change.</p></div>
+    <div class="card"><h3>The beta window is a choice</h3><p>A short window tracks beta as it changes but is noisy. A long window is stable but can leave market exposure in the residual after a regime shift. The notebook this is based on uses 63 days. Flip the strip above and watch the numbers move.</p></div>
+    <div class="card"><h3>One day can own a window</h3><p>Correlation is driven by the biggest days. A single 5-sigma session can set a 63-day correlation by itself, then vanish 63 days later. When a line jumps up, goes flat, and drops off a cliff, look for the event that started it.</p></div>
+    <div class="card"><h3>Correlation is not a hedge ratio</h3><p>Two residuals can be 0.8 correlated with very different volatilities. Correlation says whether two things move together, not by how much. For sizing, use beta or vol-scaled weights.</p></div>
+    <div class="card"><h3>One market factor only</h3><p>This strips out SPY and nothing else. For bonds, gold and oil, SPY explains little, so their residual is close to their raw return. A full factor model would add rates, dollar and commodity factors.</p></div>
+    <div class="card"><h3>How the math runs</h3><p>Log returns. Beta and alpha from an OLS of each ETF on SPY over the trailing window, ending on the day itself, as in the source notebook. Residual = return − (α + β × SPY). Correlations are Pearson over the chosen lookback.</p></div>
+  </div>
+</section>
+
+<footer>
+  <div><b style="color:var(--ink-2)">Data:</b> Moontower end-of-day closes, <span id="range"></span>, <span id="nDays"></span> trading days, 36 ETFs. Based on the beta-adjusted residual method in <span class="mono">data-pipelines/quant-analysis/factor_residual_correlations.ipynb</span>.</div>
+  <div>For research and learning. Not investment advice.</div>
+</footer>
+</main>
+<div id="tip" hidden></div>
+
+<script>
+const RAW = __DATA__;
+
+/* ---------- universe ---------- */
+const META = {
+  SPY:["S&P 500","Market"],
+  MTUM:["Momentum","Style"], VTV:["Value","Style"], VUG:["Growth","Style"], IWM:["Small caps (R2000)","Style"],
+  IJR:["Small caps (S&P 600)","Style"], VYM:["High dividend","Style"], SCHD:["Dividend quality","Style"],
+  RSP:["Equal-weight S&P","Style"], QQQ:["Nasdaq-100","Style"],
+  ARKK:["Speculative growth","Theme"], SMH:["Semiconductors","Theme"], KRE:["Regional banks","Theme"],
+  XLK:["Technology","Sector"], XLF:["Financials","Sector"], XLE:["Energy","Sector"], XLV:["Health care","Sector"],
+  XLI:["Industrials","Sector"], XLY:["Cons. discretionary","Sector"], XLP:["Cons. staples","Sector"], XLU:["Utilities","Sector"],
+  XLB:["Materials","Sector"], XLRE:["Real estate","Sector"], XLC:["Communication","Sector"],
+  EFA:["Developed ex-US","International"], EEM:["Emerging markets","International"], EWJ:["Japan","International"],
+  EWZ:["Brazil","International"], FXI:["China large-cap","International"],
+  TLT:["Long Treasuries","Macro"], IEF:["7–10y Treasuries","Macro"], HYG:["High-yield credit","Macro"],
+  GLD:["Gold","Macro"], SLV:["Silver","Macro"], USO:["Crude oil","Macro"], VNQ:["REITs","Macro"]
+};
+const GROUP_ORDER = ["Style","Theme","Sector","International","Macro"];
+const GROUP_LABEL = {Style:"Style factors",Theme:"Themes & industries",Sector:"US sectors",International:"International",Macro:"Rates, credit & commodities"};
+const TICKERS = Object.keys(META).filter(t=>t!=="SPY" && RAW.r[t]);
+const DATES = RAW.d.split(",").map(s=>new Date(Date.UTC(2000+ +s.slice(0,2), +s.slice(2,4)-1, +s.slice(4,6))));
+const N = DATES.length;
+const RET = {}; for (const t in RAW.r) RET[t] = Float64Array.from(RAW.r[t].split(","), x=>+x/1e5);
+const M = RET.SPY;
+
+/* ---------- state ---------- */
+const S = { hedge:63, exT:"MTUM", exRange:252, hmMode:"res", hmWin:63, hmSet:"core", hmIdx:N-1,
+            pA:"MTUM", pB:"VUG", pSrc:"res", dSrc:"res", dWin:63, sortKey:null, sortDir:-1 };
+try{ const saved = JSON.parse(localStorage.getItem("factorlab")||"{}"); if (saved.hedge) S.hedge = saved.hedge; }catch(e){}
+
+/* ---------- math ---------- */
+const resCache = {};
+function getRes(w){
+  if (resCache[w]) return resCache[w];
+  const res={}, beta={};
+  for (const t of TICKERS){
+    const y=RET[t], r=new Float64Array(N).fill(NaN), b=new Float64Array(N).fill(NaN);
+    let sx=0,sy=0,sxx=0,sxy=0;
+    for (let i=0;i<N;i++){
+      const x=M[i], v=y[i]; sx+=x; sy+=v; sxx+=x*x; sxy+=x*v;
+      if (i>=w){ const xo=M[i-w], vo=y[i-w]; sx-=xo; sy-=vo; sxx-=xo*xo; sxy-=xo*vo; }
+      if (i>=w-1){
+        const mx=sx/w, my=sy/w, cov=sxy-w*mx*my, vr=sxx-w*mx*mx, bb=cov/vr, a=my-bb*mx;
+        b[i]=bb; r[i]=v-(a+bb*x);
+      }
+    }
+    res[t]=r; beta[t]=b;
+  }
+  return resCache[w]={res,beta};
+}
+function src(kind){ return kind==="raw" ? RET : getRes(S.hedge).res; }
+function rollCorr(a,b,w){
+  const out=new Float64Array(N).fill(NaN);
+  let sa=0,sb=0,saa=0,sbb=0,sab=0,n=0,st=0;
+  for (let i=0;i<N;i++){
+    const x=a[i], y=b[i];
+    if (Number.isNaN(x)||Number.isNaN(y)){ sa=sb=saa=sbb=sab=0;n=0;st=i+1;continue; }
+    sa+=x;sb+=y;saa+=x*x;sbb+=y*y;sab+=x*y;n++;
+    if (n>w){ const xo=a[i-w], yo=b[i-w]; sa-=xo;sb-=yo;saa-=xo*xo;sbb-=yo*yo;sab-=xo*yo;n=w; }
+    if (n===w){ const c=sab-sa*sb/w, va=saa-sa*sa/w, vb=sbb-sb*sb/w; out[i]=c/Math.sqrt(va*vb); }
+  }
+  return out;
+}
+function corrAt(a,b,end,w){
+  let sa=0,sb=0,saa=0,sbb=0,sab=0;
+  for (let i=end-w+1;i<=end;i++){ const x=a[i],y=b[i]; if(Number.isNaN(x)||Number.isNaN(y)) return NaN; sa+=x;sb+=y;saa+=x*x;sbb+=y*y;sab+=x*y; }
+  const c=sab-sa*sb/w, va=saa-sa*sa/w, vb=sbb-sb*sb/w; return c/Math.sqrt(va*vb);
+}
+function sumRange(a,i0,i1){ let s=0; for(let i=i0;i<=i1;i++){ if(!Number.isNaN(a[i])) s+=a[i]; } return s; }
+function stdRange(a,i0,i1){ let s=0,ss=0,n=0; for(let i=i0;i<=i1;i++){ const v=a[i]; if(Number.isNaN(v)) continue; s+=v;ss+=v*v;n++; } const m=s/n; return Math.sqrt((ss-n*m*m)/(n-1)); }
+function firstValid(a){ for(let i=0;i<N;i++) if(!Number.isNaN(a[i])) return i; return N; }
+
+/* ---------- formatting ---------- */
+const fmtPct=(x,d=1)=>Number.isFinite(x)?(x>0?"+":x<0?"−":"")+Math.abs(x*100).toFixed(d)+"%":"–";
+const fmtC=(x)=>Number.isFinite(x)?(x>0?"+":x<0?"−":"")+Math.abs(x).toFixed(2):"–";
+const fmtN=(x,d=2)=>Number.isFinite(x)?(x<0?"−":"")+Math.abs(x).toFixed(d):"–";
+const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const fmtD=d=>`${MON[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+const cls=x=>x>0?"pos":x<0?"neg":"";
+const name=t=>META[t][0];
+
+/* ---------- tokens & svg helpers ---------- */
+function tok(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+const NS="http://www.w3.org/2000/svg";
+function el(tag,attrs={},parent){ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); if(parent) parent.appendChild(e); return e; }
+function niceTicks(lo,hi,n=5){
+  const span=hi-lo||1; let step=Math.pow(10,Math.floor(Math.log10(span/n))); const err=span/n/step;
+  if(err>=7.5)step*=10; else if(err>=3.5)step*=5; else if(err>=1.5)step*=2;
+  const out=[]; for(let v=Math.ceil(lo/step)*step; v<=hi+1e-12; v+=step) out.push(+v.toFixed(10)); return out;
+}
+const tip=document.getElementById("tip");
+function showTip(e,html){ tip.innerHTML=html; tip.hidden=false; const pad=14, w=tip.offsetWidth, h=tip.offsetHeight;
+  let x=e.clientX+pad, y=e.clientY+pad; if(x+w>innerWidth-8) x=e.clientX-w-pad; if(y+h>innerHeight-8) y=e.clientY-h-pad; tip.style.left=Math.max(8,x)+"px"; tip.style.top=Math.max(8,y)+"px"; }
+function hideTip(){ tip.hidden=true; }
+function hexMix(a,b,t){ const p=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)); const A=p(a),B=p(b); return "rgb("+A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(",")+")"; }
+
+/* Line chart over date index range */
+function lineChart(host,{series,i0,i1,height=260,yFmt=v=>v,yDomain,zero=true,endLabels=true,refLines=[]}){
+  host.innerHTML="";
+  const W=Math.max(300,host.clientWidth), H=height, m={l:48,r:endLabels?96:14,t:10,b:26};
+  const iw=W-m.l-m.r, ih=H-m.t-m.b;
+  let lo=Infinity,hi=-Infinity;
+  if(yDomain){[lo,hi]=yDomain;} else { for(const s of series) for(let i=i0;i<=i1;i++){const v=s.y[i]; if(Number.isFinite(v)){lo=Math.min(lo,v);hi=Math.max(hi,v);}} if(zero){lo=Math.min(lo,0);hi=Math.max(hi,0);} const p=(hi-lo)*.06||.01; lo-=p;hi+=p; }
+  const X=i=>m.l+(i-i0)/(i1-i0)*iw, Y=v=>m.t+(hi-v)/(hi-lo)*ih;
+  const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img"},host);
+  const g=el("g",{},svg);
+  const ink2=tok("--muted"), grid=tok("--grid");
+  for(const v of niceTicks(lo,hi,5)){ el("line",{x1:m.l,x2:m.l+iw,y1:Y(v),y2:Y(v),stroke:grid,"stroke-width":1},g);
+    const t=el("text",{x:m.l-8,y:Y(v)+4,"text-anchor":"end","font-size":11,fill:ink2,"font-family":"JetBrains Mono, monospace"},g); t.textContent=yFmt(v); }
+  if(zero && lo<0 && hi>0) el("line",{x1:m.l,x2:m.l+iw,y1:Y(0),y2:Y(0),stroke:ink2,"stroke-width":1,opacity:.6},g);
+  for(const r of refLines){ if(r.v<lo||r.v>hi) continue; el("line",{x1:m.l,x2:m.l+iw,y1:Y(r.v),y2:Y(r.v),stroke:ink2,"stroke-width":1,"stroke-dasharray":"2 4",opacity:.7},g); }
+  // x ticks: month starts, thinned
+  const span=i1-i0, every = span>500?6: span>250?3: span>120?2:1; let lastM=-1, cnt=0;
+  for(let i=i0+1;i<=i1;i++){ const d=DATES[i], mm=d.getUTCMonth(); if(mm!==DATES[i-1].getUTCMonth()){ if(mm%every===0){ const x=X(i);
+      el("line",{x1:x,x2:x,y1:m.t+ih,y2:m.t+ih+4,stroke:ink2},g);
+      const t=el("text",{x,y:H-6,"text-anchor":"middle","font-size":11,fill:ink2},g); t.textContent=(mm===0?d.getUTCFullYear():MON[mm]+(span>250?" ’"+String(d.getUTCFullYear()).slice(2):"")); } } }
+  for(const s of series){
+    let d="",pen=false; for(let i=i0;i<=i1;i++){ const v=s.y[i]; if(!Number.isFinite(v)){pen=false;continue;} d+=(pen?"L":"M")+X(i).toFixed(1)+","+Y(v).toFixed(1); pen=true; }
+    el("path",{d,fill:"none",stroke:s.color,"stroke-width":s.width||2,"stroke-dasharray":s.dash||"","stroke-linejoin":"round","stroke-linecap":"round",opacity:s.opacity||1},g);
+  }
+  if(endLabels){ const labs=series.filter(s=>s.label!==false).map(s=>{let i=i1; while(i>i0&&!Number.isFinite(s.y[i]))i--; return {s,y:Y(s.y[i]),v:s.y[i]};}).sort((a,b)=>a.y-b.y);
+    for(let k=1;k<labs.length;k++) if(labs[k].y-labs[k-1].y<14) labs[k].y=labs[k-1].y+14;
+    for(const L of labs){ el("circle",{cx:X(i1),cy:Y(L.v),r:3,fill:L.s.color},g); const t=el("text",{x:m.l+iw+8,y:L.y+4,"font-size":11.5,fill:tok("--ink-2")},g); t.textContent=L.s.short||L.s.name; } }
+  // hover
+  const cross=el("line",{y1:m.t,y2:m.t+ih,stroke:ink2,"stroke-width":1,opacity:0},g);
+  const dots=series.map(s=>el("circle",{r:3.5,fill:s.color,stroke:tok("--surface"),"stroke-width":2,opacity:0},g));
+  const hit=el("rect",{x:m.l,y:m.t,width:iw,height:ih,fill:"transparent"},svg);
+  hit.addEventListener("pointermove",e=>{ const r=svg.getBoundingClientRect(); const px=(e.clientX-r.left)*W/r.width; const i=Math.max(i0,Math.min(i1,Math.round(i0+(px-m.l)/iw*(i1-i0))));
+    cross.setAttribute("x1",X(i));cross.setAttribute("x2",X(i));cross.setAttribute("opacity",.6);
+    let html=`<div class="t">${fmtD(DATES[i])}</div>`; series.forEach((s,k)=>{const v=s.y[i]; if(Number.isFinite(v)){dots[k].setAttribute("cx",X(i));dots[k].setAttribute("cy",Y(v));dots[k].setAttribute("opacity",1);} else dots[k].setAttribute("opacity",0);
+      html+=`<div class="r"><span><i class="sw" style="background:${s.color}"></i>${s.name}</span><span>${Number.isFinite(v)?yFmt(v,true):"–"}</span></div>`;});
+    showTip(e,html); });
+  hit.addEventListener("pointerleave",()=>{cross.setAttribute("opacity",0);dots.forEach(d=>d.setAttribute("opacity",0));hideTip();});
+}
+
+/* ---------- segmented control helper ---------- */
+function seg(id,opts,get,set){ const host=document.getElementById(id); host.innerHTML="";
+  for(const [val,lab] of opts){ const b=document.createElement("button"); b.type="button"; b.textContent=lab; b.setAttribute("aria-pressed",String(get()===val)); b.onclick=()=>{set(val);}; host.appendChild(b);} }
+function fillSelect(id,val,list=TICKERS){ const s=document.getElementById(id); s.innerHTML="";
+  for(const g of GROUP_ORDER){ const og=document.createElement("optgroup"); og.label=GROUP_LABEL[g];
+    for(const t of list.filter(t=>META[t][1]===g)){ const o=document.createElement("option"); o.value=t; o.textContent=`${t} · ${name(t)}`; og.appendChild(o);} if(og.children.length) s.appendChild(og);} s.value=val; }
+
+/* ---------- 01 decomposition ---------- */
+function renderExplainer(){
+  const t=S.exT, {res,beta}=getRes(S.hedge), w=S.hedge, end=N-1, y=RET[t];
+  const fv=firstValid(res[t]); const i0=S.exRange==="all"?fv:Math.max(fv,end-S.exRange);
+  // stats over the beta window
+  let sx=0,sy=0,sxx=0,syy=0,sxy=0; for(let i=end-w+1;i<=end;i++){const a=M[i],b=y[i];sx+=a;sy+=b;sxx+=a*a;syy+=b*b;sxy+=a*b;}
+  const cxy=sxy-sx*sy/w, vx=sxx-sx*sx/w, vy=syy-sy*sy/w, b=cxy/vx, a=(sy-b*sx)/w, rho=cxy/Math.sqrt(vx*vy), r2=rho*rho;
+  const residVol=Math.sqrt((vy-b*cxy)/(w-2)*252), totVol=Math.sqrt(vy/(w-1)*252);
+  // cumulative parts
+  const tot=new Float64Array(N).fill(NaN), mkt=new Float64Array(N).fill(NaN), fac=new Float64Array(N).fill(NaN), naive=new Float64Array(N).fill(NaN);
+  let ct=0,cm=0,cf=0,cn=0; tot[i0]=mkt[i0]=fac[i0]=naive[i0]=0;
+  for(let i=i0+1;i<=end;i++){ ct+=y[i]; cm+=beta[t][i]*M[i]; cf+=res[t][i]; cn+=y[i]-M[i]; tot[i]=ct; mkt[i]=cm; fac[i]=cf; naive[i]=cn; }
+  const toS=a=>a.map(v=>Number.isFinite(v)?Math.exp(v)-1:NaN);
+  document.getElementById("exStats").innerHTML=[
+    ["Beta to SPY",fmtN(b),`${w}-day window`],
+    ["Market share of variance",(r2*100).toFixed(0)+"%",`R², ${w} days`],
+    ["Total vol",(totVol*100).toFixed(1)+"%","annualized"],
+    ["Factor vol",(residVol*100).toFixed(1)+"%","residual, annualized"],
+    ["Factor return",fmtPct(Math.exp(fac[end])-1),S.exRange==="all"?"full history":`last ${({63:"3 months",126:"6 months",252:"year"})[S.exRange]}`]
+  ].map(([k,v,h])=>`<div class="stat"><span class="k">${k}</span><span class="v">${v}</span><span class="h">${h}</span></div>`).join("");
+  document.getElementById("scTitle").textContent=`${t} vs SPY, daily returns`;
+  // scatter
+  const host=document.getElementById("scatter"); host.innerHTML="";
+  const W=Math.max(280,host.clientWidth), H=Math.min(340,W*0.92), mm={l:46,r:12,t:10,b:34}, iw=W-mm.l-mm.r, ih=H-mm.t-mm.b;
+  let lim=0; for(let i=end-w+1;i<=end;i++) lim=Math.max(lim,Math.abs(M[i]),Math.abs(y[i])); lim*=1.08;
+  const X=v=>mm.l+(v+lim)/(2*lim)*iw, Y=v=>mm.t+(lim-v)/(2*lim)*ih;
+  const svg=el("svg",{viewBox:`0 0 ${W} ${H}`},host), g=el("g",{},svg), mu=tok("--muted"), grid=tok("--grid");
+  const cid="clip"+Math.random().toString(36).slice(2); const cp=el("clipPath",{id:cid},el("defs",{},svg)); el("rect",{x:mm.l,y:mm.t,width:iw,height:ih},cp);
+  for(const v of niceTicks(-lim,lim,4)){ el("line",{x1:X(v),x2:X(v),y1:mm.t,y2:mm.t+ih,stroke:v===0?mu:grid,opacity:v===0?.5:1},g); el("line",{x1:mm.l,x2:mm.l+iw,y1:Y(v),y2:Y(v),stroke:v===0?mu:grid,opacity:v===0?.5:1},g);
+    let tt=el("text",{x:X(v),y:H-16,"text-anchor":"middle","font-size":11,fill:mu,"font-family":"JetBrains Mono, monospace"},g); tt.textContent=fmtPct(v,1).replace(".0","");
+    tt=el("text",{x:mm.l-6,y:Y(v)+4,"text-anchor":"end","font-size":11,fill:mu,"font-family":"JetBrains Mono, monospace"},g); tt.textContent=fmtPct(v,1).replace(".0",""); }
+  let t1=el("text",{x:mm.l+iw,y:H-2,"text-anchor":"end","font-size":11,fill:mu},g); t1.textContent="SPY return →";
+  // residual sticks for last day + fit
+  el("line",{x1:X(-lim),y1:Y(a+b*-lim),x2:X(lim),y2:Y(a+b*lim),stroke:tok("--amber"),"stroke-width":2,"clip-path":`url(#${cid})`},g);
+  const P=tok("--purple"), R=tok("--rose"), surf=tok("--surface");
+  for(let i=end-w+1;i<=end;i++){ const c=el("circle",{cx:X(M[i]),cy:Y(y[i]),r:i===end?5:3.6,fill:i===end?surf:P,"fill-opacity":i===end?1:.55,stroke:i===end?R:surf,"stroke-width":i===end?2.5:1},g);
+    c.addEventListener("pointermove",e=>showTip(e,`<div class="t">${fmtD(DATES[i])}</div><div class="r"><span>SPY</span><span>${fmtPct(M[i],2)}</span></div><div class="r"><span>${t}</span><span>${fmtPct(y[i],2)}</span></div><div class="r"><span>Line predicted</span><span>${fmtPct(a+b*M[i],2)}</span></div><div class="r"><span>Residual</span><span>${fmtPct(y[i]-a-b*M[i],2)}</span></div>`)); c.addEventListener("pointerleave",hideTip); }
+  { const xl=X(M[end]), yl=Y(y[end]), yp=Y(a+b*M[end]); el("line",{x1:xl,x2:xl,y1:yl,y2:yp,stroke:R,"stroke-width":2,"stroke-dasharray":"3 3"},g); }
+  t1=el("text",{x:mm.l+6,y:mm.t+14,"font-size":11.5,fill:tok("--ink-2")},g); t1.textContent=`slope β = ${fmtN(b)}`;
+  // cum chart
+  const A=tok("--amber"), Nn=tok("--neutral");
+  lineChart(document.getElementById("cum"),{i0,i1:end,height:300,yFmt:(v,full)=>fmtPct(v,full?1:0),series:[
+    {name:`${t} total`,short:"Total",y:toS(tot),color:Nn,width:2},
+    {name:"Market part (β × SPY)",short:"Market",y:toS(mkt),color:A,width:2},
+    {name:"Factor part (residual)",short:"Factor",y:toS(fac),color:P,width:2.5},
+    {name:`Shortcut: ${t} − SPY`,short:"ETF−SPY",y:toS(naive),color:R,width:1.75,dash:"5 4"}]});
+  document.getElementById("cumLegend").innerHTML=`<span><i style="border-color:${Nn}"></i>${t} total</span><span><i style="border-color:${A}"></i>Market part (β × SPY)</span><span><i style="border-color:${P}"></i>Factor part (residual)</span><span><i class="dash" style="border-color:${R}"></i>Shortcut: ${t} − SPY</span>`;
+  const gap=(Math.exp(naive[end])-1)-(Math.exp(fac[end])-1);
+  const beta1 = Math.abs(b-1)<0.12;
+  document.getElementById("exNote").innerHTML = `<b>${t} (${name(t)})</b> has a beta of ${fmtN(b)}, so the market explains about ${(r2*100).toFixed(0)}% of its day-to-day variance. `+
+    (beta1? `With beta this close to 1, the "minus SPY" shortcut and the factor line nearly agree (gap ${fmtPct(gap)}).`
+          : `Because beta is ${b<1?"below":"above"} 1, the "minus SPY" shortcut ${b<1?"subtracts too much market":"leaves market exposure in"}, and it ends ${(Math.abs(gap)*100).toFixed(1)} points ${gap>0?"above":"below"} the true factor line over this period. In ${b<1?"a rising":"a falling"} market that shortcut makes the factor look worse than it was.`);
+}
+
+/* ---------- 02 scoreboard ---------- */
+const COLS=[["t","ETF"],["n","Factor"],["beta","Beta"],["z","Today z"],["r5","1W"],["r21","1M"],["r63","3M"],["r252","1Y"],["spark","3M path"]];
+function renderBoard(){
+  const {res,beta}=getRes(S.hedge), end=N-1;
+  const rows=TICKERS.map(t=>{ const r=res[t]; const sd=stdRange(r,end-62,end); const o={t,g:META[t][1],n:name(t),beta:beta[t][end],z:r[end]/sd};
+    for(const k of [5,21,63,252]) o["r"+k]=Math.exp(sumRange(r,end-k+1,end))-1; return o; });
+  const thead=document.querySelector("#board thead"), tbody=document.querySelector("#board tbody");
+  thead.innerHTML="<tr>"+COLS.map(([k,l])=>`<th data-k="${k}" class="${S.sortKey===k?"sorted":""}" ${k==="spark"?'style="cursor:default"':""}>${l}${S.sortKey===k?(S.sortDir>0?" ↑":" ↓"):""}</th>`).join("")+"</tr>";
+  thead.querySelectorAll("th").forEach(th=>{ const k=th.dataset.k; if(k==="spark") return; th.onclick=()=>{ if(S.sortKey===k) S.sortDir*=-1; else {S.sortKey=k;S.sortDir=(k==="t"||k==="n")?1:-1;} renderBoard(); }; });
+  const P=tok("--purple"), mu=tok("--muted");
+  const spark=t=>{ const r=res[t], i0=end-63, pts=[]; let c=0, lo=0, hi=0; for(let i=i0;i<=end;i++){ if(i>i0)c+=r[i]; pts.push(c); lo=Math.min(lo,c); hi=Math.max(hi,c);} const W=96,H=22, sc=v=>H-2-(v-lo)/((hi-lo)||1)*(H-4);
+    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="vertical-align:middle"><line x1="0" x2="${W}" y1="${sc(0)}" y2="${sc(0)}" stroke="${mu}" stroke-width="1" opacity=".35"/><path d="${pts.map((v,i)=>(i?"L":"M")+(i/(pts.length-1)*W).toFixed(1)+","+sc(v).toFixed(1)).join("")}" fill="none" stroke="${P}" stroke-width="1.6"/><circle cx="${W}" cy="${sc(pts[pts.length-1])}" r="2.2" fill="${P}"/></svg>`; };
+  const cell=o=>{ const az=Math.abs(o.z); return `<tr class="row" data-t="${o.t}"><td><b>${o.t}</b></td><td>${o.n}</td><td>${fmtN(o.beta)}</td><td><span class="zpill ${az>=3?"zhot":az>=2?"zwarm":""} ${cls(o.z)}">${fmtN(o.z,1)}</span></td>`+
+    ["r5","r21","r63","r252"].map(k=>`<td class="${cls(o[k])}">${fmtPct(o[k])}</td>`).join("")+`<td>${spark(o.t)}</td></tr>`; };
+  let html="";
+  if(!S.sortKey){ for(const g of GROUP_ORDER){ html+=`<tr class="grp"><td colspan="9">${GROUP_LABEL[g]}</td></tr>`+rows.filter(r=>r.g===g).map(cell).join(""); } }
+  else { const k=S.sortKey; rows.sort((a,b)=>(typeof a[k]==="string"? a[k].localeCompare(b[k]) : (a[k]-b[k]))*S.sortDir); html=rows.map(cell).join(""); }
+  tbody.innerHTML=html;
+  tbody.querySelectorAll("tr.row").forEach(tr=>tr.onclick=()=>{ const t=tr.dataset.t; S.exT=t; if(S.pA!==t) {S.pB=S.pA; S.pA=t;} renderAll(); document.getElementById("decompose").scrollIntoView({behavior:"smooth"}); });
+}
+
+/* ---------- 03 heatmap ---------- */
+const SETS={ core:["Style factors + sectors",["Style","Theme","Sector"]], all:["Everything",GROUP_ORDER], cross:["Factors + cross-asset",["Style","International","Macro"]], sectors:["Sectors only",["Sector"]] };
+function renderHeatmap(){
+  const minIdx = S.hmMode==="diff" ? firstValid(getRes(S.hedge).res.MTUM)+251 : (S.hmMode==="res"? firstValid(getRes(S.hedge).res.MTUM)+S.hmWin-1 : S.hmWin);
+  const slider=document.getElementById("hmDate"); slider.min=minIdx; slider.max=N-1; if(S.hmIdx<minIdx) S.hmIdx=minIdx; slider.value=S.hmIdx;
+  document.getElementById("hmDateLab").textContent=fmtD(DATES[S.hmIdx]);
+  const tk=TICKERS.filter(t=>SETS[S.hmSet][1].includes(META[t][1]));
+  const n=tk.length, R=S.hmMode==="raw"?RET:getRes(S.hedge).res, end=S.hmIdx;
+  const C=[...Array(n)].map(()=>new Float64Array(n));
+  for(let i=0;i<n;i++) for(let j=i;j<n;j++){ let v;
+    if(i===j) v=1; else if(S.hmMode==="diff") v=corrAt(R[tk[i]],R[tk[j]],end,21)-corrAt(R[tk[i]],R[tk[j]],end,252); else v=corrAt(R[tk[i]],R[tk[j]],end,S.hmWin);
+    C[i][j]=C[j][i]=v; }
+  const host=document.getElementById("hm"); host.innerHTML="";
+  const W=Math.max(320,host.clientWidth), lab=44, top=44, cs=Math.max(7,Math.min(26,(W-lab-8)/n)), H=top+cs*n+8, Wd=lab+cs*n+8;
+  const svg=el("svg",{viewBox:`0 0 ${Wd} ${H}`,style:`max-width:${Wd}px`},host);
+  const surf=tok("--surface"), P=tok("--purple"), Ro=tok("--rose"), mu=tok("--muted"), ink2=tok("--ink-2");
+  const fs=Math.min(11,cs*0.62);
+  tk.forEach((t,i)=>{ let tt=el("text",{x:lab-5,y:top+i*cs+cs/2+fs*0.36,"text-anchor":"end","font-size":fs,fill:ink2,"font-family":"JetBrains Mono, monospace"},svg); tt.textContent=t;
+    tt=el("text",{x:0,y:0,"font-size":fs,fill:ink2,"font-family":"JetBrains Mono, monospace",transform:`translate(${lab+i*cs+cs/2+fs*0.36},${top-5}) rotate(-90)`},svg); tt.textContent=t; });
+  const scale = S.hmMode==="diff"? 1 : 1;
+  const g=el("g",{},svg);
+  for(let i=0;i<n;i++) for(let j=0;j<n;j++){ const v=C[i][j]; const t=Math.min(1,Math.abs(v)/scale);
+    el("rect",{x:lab+j*cs+0.5,y:top+i*cs+0.5,width:cs-1,height:cs-1,rx:Math.min(3,cs/6),fill:i===j?tok("--surface-2"):(v>=0?hexMix(surf,P,t):hexMix(surf,Ro,t)),"data-i":i,"data-j":j},g); }
+  // group separators
+  let prev=null; tk.forEach((t,i)=>{ const gname=META[t][1]; if(prev&&gname!==prev){ el("line",{x1:lab,x2:lab+n*cs,y1:top+i*cs,y2:top+i*cs,stroke:ink2,"stroke-width":1.2,opacity:.5},svg); el("line",{y1:top,y2:top+n*cs,x1:lab+i*cs,x2:lab+i*cs,stroke:ink2,"stroke-width":1.2,opacity:.5},svg);} prev=gname; });
+  g.addEventListener("pointermove",e=>{ const r=e.target; if(r.tagName!=="rect") return; const i=+r.dataset.i,j=+r.dataset.j; if(i===j){hideTip();return;}
+    const a=tk[i], b=tk[j]; let html=`<div class="t">${a} × ${b}</div><div class="psub" style="margin-bottom:4px">${name(a)} vs ${name(b)}</div>`;
+    if(S.hmMode==="diff"){ const s=corrAt(R[a],R[b],end,21), l=corrAt(R[a],R[b],end,252); html+=`<div class="r"><span>21-day corr</span><span>${fmtC(s)}</span></div><div class="r"><span>252-day corr</span><span>${fmtC(l)}</span></div><div class="r"><span>Change</span><span>${fmtC(s-l)}</span></div>`; }
+    else html+=`<div class="r"><span>${S.hmWin}-day ${S.hmMode==="raw"?"raw":"residual"} corr</span><span>${fmtC(C[i][j])}</span></div>`;
+    html+=`<div class="psub" style="margin-top:4px">Click to chart this pair</div>`; showTip(e,html); });
+  g.addEventListener("pointerleave",hideTip);
+  g.addEventListener("click",e=>{ const r=e.target; if(r.tagName!=="rect") return; const i=+r.dataset.i,j=+r.dataset.j; if(i===j) return; S.pA=tk[i]; S.pB=tk[j]; renderPair(); document.getElementById("lookbacks").scrollIntoView({behavior:"smooth"}); });
+  // legend
+  let avg=0,cnt=0; for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){ if(Number.isFinite(C[i][j])){avg+=C[i][j];cnt++;} }
+  document.getElementById("hmLegend").innerHTML = `<span style="display:inline-flex;align-items:center;gap:8px"><span class="num">${S.hmMode==="diff"?"−1 (decoupled)":"−1"}</span><span style="width:140px;height:10px;border-radius:5px;background:linear-gradient(90deg,${Ro},${surf} 50%,${P});border:1px solid var(--line)"></span><span class="num">${S.hmMode==="diff"?"+1 (converged)":"+1"}</span></span>`+
+    `<span>${S.hmMode==="diff"?"Average change":"Average pairwise correlation"}: <b class="num">${fmtC(avg/cnt)}</b></span>`+
+    `<span>${S.hmMode==="diff"?"Purple: pairs moving together more this month than over the past year. Rose: pairs that have drifted apart.":S.hmMode==="raw"?"Raw returns include the market, so most cells are purple.":"Residuals have the market removed. What's left is shared factor exposure."}</span>`;
+}
+
+/* ---------- 04 lookbacks ---------- */
+function renderPair(){
+  document.getElementById("pA").value=S.pA; document.getElementById("pB").value=S.pB;
+  seg("pSrc",[["res","Residual"],["raw","Raw returns"]],()=>S.pSrc,v=>{S.pSrc=v;renderPair();});
+  const R=src(S.pSrc), a=R[S.pA], b=R[S.pB];
+  const c21=rollCorr(a,b,21), c63=rollCorr(a,b,63), c252=rollCorr(a,b,252);
+  const i0=firstValid(c21), end=N-1;
+  const A=tok("--amber"), P=tok("--purple"), Ro=tok("--rose");
+  lineChart(document.getElementById("pair"),{i0,i1:end,height:300,yDomain:[-1,1],yFmt:(v,full)=>full?fmtC(v):v.toFixed(1).replace("-","−"),series:[
+    {name:"21-day (fast, noisy)",short:"21d",y:c21,color:A,width:1.5},
+    {name:"63-day",short:"63d",y:c63,color:P,width:2},
+    {name:"252-day (slow, steady)",short:"252d",y:c252,color:Ro,width:2.75}]});
+  document.getElementById("pairLegend").innerHTML=`<span><i style="border-color:${A}"></i>21-day: about 1 month</span><span><i style="border-color:${P}"></i>63-day: about 1 quarter</span><span><i style="border-color:${Ro};border-top-width:3px"></i>252-day: about 1 year</span>`;
+  // stats
+  let hist=[]; for(let i=firstValid(c21);i<=end;i++) if(Number.isFinite(c21[i])) hist.push(c21[i]); hist.sort((x,y)=>x-y);
+  const pctile = hist.filter(v=>v<=c21[end]).length/hist.length;
+  const gap=c21[end]-c252[end];
+  document.getElementById("pStats").innerHTML=[
+    ["21-day",fmtC(c21[end]),`${Math.round(pctile*100)}th percentile of its history`],
+    ["63-day",fmtC(c63[end]),"quarter"],
+    ["252-day",fmtC(c252[end]),"year"],
+    ["Short − long",fmtC(gap),Math.abs(gap)>=0.3?"large break":Math.abs(gap)>=0.15?"moderate":"in line"]
+  ].map(([k,v,h])=>`<div class="stat"><span class="k">${k}</span><span class="v">${v}</span><span class="h">${h}</span></div>`).join("");
+  const kind=S.pSrc==="res"?"residual":"raw";
+  let note=`<b>${S.pA} (${name(S.pA)}) vs ${S.pB} (${name(S.pB)})</b>, ${kind} returns. `;
+  if(Math.abs(gap)>=0.3) note+=`The last month looks very different from the last year: ${fmtC(c21[end])} now against ${fmtC(c252[end])}. Check the chart. If the 21-day line has done this before and snapped back, treat it as noise. If the 63-day line is following it, the relationship is shifting.`;
+  else if(Math.abs(gap)>=0.15) note+=`The 21-day correlation has moved ${gap>0?"above":"below"} the yearly level by ${fmtC(Math.abs(gap)).replace("+","")}. Within the normal range of noise for a one-month window, but worth watching.`;
+  else note+=`Short and long windows agree, so the relationship looks stable right now. How wide the 21-day line swings around the 252-day line shows how noisy a one-month estimate is for this pair.`;
+  if(S.pSrc==="res" && c252[end]<-0.8) note+=` A correlation this close to −1 is mostly arithmetic: when two ETFs roughly add up to the market (value + growth ≈ S&P 500), removing the market turns them into mirror images.`;
+  if(S.pSrc==="raw") note+=` Switch to residuals to see how much of this correlation was just the shared market.`;
+  document.getElementById("pNote").innerHTML=note;
+}
+function renderMovers(){
+  const R=getRes(S.hedge).res, end=N-1, tk=TICKERS.filter(t=>["Style","Theme","Sector"].includes(META[t][1])), out=[];
+  for(let i=0;i<tk.length;i++) for(let j=i+1;j<tk.length;j++){ const s=corrAt(R[tk[i]],R[tk[j]],end,21), l=corrAt(R[tk[i]],R[tk[j]],end,252); out.push({a:tk[i],b:tk[j],s,l,d:s-l}); }
+  out.sort((x,y)=>Math.abs(y.d)-Math.abs(x.d));
+  const host=document.getElementById("movers"); host.innerHTML="";
+  for(const m of out.slice(0,8)){ const b=document.createElement("button"); b.type="button"; b.className="mover";
+    b.innerHTML=`<span class="pr">${m.a} × ${m.b} <span>${name(m.a)} / ${name(m.b)}</span></span><span class="vals">252d ${fmtC(m.l)} → 21d ${fmtC(m.s)}</span><span class="d ${m.d>0?"":"neg"}" style="${m.d>0?"color:var(--purple)":""}">${m.d>0?"Converging":"Decoupling"} ${fmtC(m.d)}</span>`;
+    b.onclick=()=>{S.pA=m.a;S.pB=m.b;S.pSrc="res";renderPair();document.getElementById("pair").scrollIntoView({behavior:"smooth",block:"center"});}; host.appendChild(b); }
+}
+
+/* ---------- 05 dispersion ---------- */
+function avgPair(tk,R,w){ const out=new Float64Array(N).fill(NaN), cnt=new Int32Array(N), sum=new Float64Array(N);
+  for(let i=0;i<tk.length;i++) for(let j=i+1;j<tk.length;j++){ const c=rollCorr(R[tk[i]],R[tk[j]],w); for(let k=0;k<N;k++) if(Number.isFinite(c[k])){sum[k]+=c[k];cnt[k]++;} }
+  for(let k=0;k<N;k++) if(cnt[k]) out[k]=sum[k]/cnt[k]; return out; }
+function renderDispersion(){
+  seg("dSrc",[["res","Residual"],["raw","Raw returns"]],()=>S.dSrc,v=>{S.dSrc=v;renderDispersion();});
+  seg("dWin",[[21,"21d"],[63,"63d"],[126,"126d"]],()=>S.dWin,v=>{S.dWin=v;renderDispersion();});
+  const R=src(S.dSrc), grp=g=>TICKERS.filter(t=>META[t][1]===g);
+  const P=tok("--purple"), A=tok("--amber"), Ro=tok("--rose");
+  const sec=avgPair(grp("Sector"),R,S.dWin), sty=avgPair(grp("Style"),R,S.dWin), intl=avgPair(grp("International"),R,S.dWin);
+  const i0=Math.max(firstValid(sec),firstValid(sty),firstValid(intl)), end=N-1;
+  const mean=a=>{let s=0,n=0; for(let i=i0;i<=end;i++) if(Number.isFinite(a[i])){s+=a[i];n++;} return s/n;};
+  lineChart(document.getElementById("disp"),{i0,i1:end,height:290,yFmt:(v,full)=>full?fmtC(v):v.toFixed(1).replace("-","−"),series:[
+    {name:"US sectors",short:"Sectors",y:sec,color:P,width:2},
+    {name:"Style factors",short:"Styles",y:sty,color:A,width:2},
+    {name:"International",short:"Intl",y:intl,color:Ro,width:2}]});
+  document.getElementById("dispLegend").innerHTML=`<span><i style="border-color:${P}"></i>US sectors (11)</span><span><i style="border-color:${A}"></i>Style factors (9)</span><span><i style="border-color:${Ro}"></i>International (5)</span>`;
+  const ms=mean(sec), ns=sec[end];
+  document.getElementById("dNote").innerHTML = `Sector ${S.dSrc==="res"?"residual":"raw"} correlation is <b>${fmtC(ns)}</b> today against a ${fmtC(ms)} average over this sample, so sectors are moving ${ns>ms+0.05?"more together than usual":ns<ms-0.05?"more independently than usual (dispersion is high)":"about as together as usual"}. `+
+    (S.dSrc==="res" ? `Residual correlations are usually near zero or negative: once the market is gone, sectors tend to offset each other. A rise toward zero or above means one theme, such as AI or rates, is driving several sectors at once.` : `Raw correlations are high because every sector shares the market. This is the number index-vol traders track as "implied correlation".`);
+}
+
+/* ---------- try chips ---------- */
+const TRIES=[
+  ["Brazil's election shock", ()=>{S.exT="EWZ";S.exRange=63;}, "decompose"],
+  ["Value vs Growth", ()=>{S.pA="VTV";S.pB="VUG";S.pSrc="res";}, "lookbacks"],
+  ["Is Momentum just tech?", ()=>{S.pA="MTUM";S.pB="XLK";S.pSrc="res";}, "lookbacks"],
+  ["Low-beta dividends", ()=>{S.exT="VYM";S.exRange=252;}, "decompose"],
+  ["Gold vs silver", ()=>{S.pA="GLD";S.pB="SLV";S.pSrc="raw";}, "lookbacks"],
+  ["What changed this month", ()=>{S.hmMode="diff";S.hmSet="core";S.hmIdx=N-1;}, "heatmap"],
+  ["Market off, map on", ()=>{S.hmMode="raw";S.hmWin=63;S.hmIdx=N-1;}, "heatmap"],
+];
+function renderTries(){ const host=document.getElementById("try");
+  TRIES.forEach(([lab,fn,sec])=>{ const b=document.createElement("button"); b.type="button"; b.className="chip"; b.textContent=lab; b.onclick=()=>{fn(); renderAll(); document.getElementById(sec).scrollIntoView({behavior:"smooth"});}; host.appendChild(b); }); }
+
+/* ---------- wiring ---------- */
+function renderControls(){
+  seg("hedgeSeg",[[21,"21d"],[63,"63d"],[126,"126d"],[252,"252d"]],()=>S.hedge,v=>{S.hedge=v; try{localStorage.setItem("factorlab",JSON.stringify({hedge:v}))}catch(e){} renderAll();});
+  seg("exRange",[[63,"3M"],[126,"6M"],[252,"1Y"],["all","All"]],()=>S.exRange,v=>{S.exRange=v;renderExplainer();renderControls();});
+  seg("hmMode",[["res","Residual"],["raw","Raw returns"],["diff","Change: 21d − 252d"]],()=>S.hmMode,v=>{S.hmMode=v;renderHeatmap();renderControls();});
+  seg("hmWin",[[21,"21d"],[63,"63d"],[126,"126d"],[252,"252d"]],()=>S.hmWin,v=>{S.hmWin=v;renderHeatmap();renderControls();});
+  document.getElementById("hmWin").parentElement.style.opacity = S.hmMode==="diff"?.4:1;
+  document.querySelectorAll("#hmWin button").forEach(b=>b.disabled=S.hmMode==="diff");
+}
+function renderAll(){ renderControls(); document.getElementById("exTicker").value=S.exT; document.getElementById("hmSet").value=S.hmSet;
+  renderExplainer(); renderBoard(); renderHeatmap(); renderPair(); renderMovers(); renderDispersion(); }
+
+fillSelect("exTicker",S.exT); fillSelect("pA",S.pA); fillSelect("pB",S.pB);
+{ const s=document.getElementById("hmSet"); for(const k in SETS){ const o=document.createElement("option"); o.value=k; o.textContent=SETS[k][0]; s.appendChild(o);} }
+document.getElementById("exTicker").onchange=e=>{S.exT=e.target.value;renderExplainer();};
+document.getElementById("pA").onchange=e=>{S.pA=e.target.value;renderPair();};
+document.getElementById("pB").onchange=e=>{S.pB=e.target.value;renderPair();};
+document.getElementById("hmSet").onchange=e=>{S.hmSet=e.target.value;renderHeatmap();};
+document.getElementById("hmDate").oninput=e=>{S.hmIdx=+e.target.value;renderHeatmap();};
+document.getElementById("asof").textContent=`Prices through ${fmtD(DATES[N-1])}`;
+document.getElementById("range").textContent=`${fmtD(DATES[0])} to ${fmtD(DATES[N-1])}`;
+document.getElementById("nDays").textContent=N;
+renderTries(); renderAll();
+let rt; addEventListener("resize",()=>{clearTimeout(rt); rt=setTimeout(renderAll,150);});
+const mq=matchMedia("(prefers-color-scheme: dark)"); mq.addEventListener?.("change",renderAll);
+new MutationObserver(renderAll).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+</script>
