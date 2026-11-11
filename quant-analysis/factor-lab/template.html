@@ -179,7 +179,7 @@ footer{padding-block:48px 64px;color:var(--muted);font-size:13px;display:grid;ga
         <div class="chart" id="scatter"></div>
       </div>
       <div style="display:grid;gap:6px;min-width:0">
-        <div><div class="ptitle">Cumulative return, split into parts</div><div class="psub">Market part plus factor part equals the ETF's total. The dashed line is the shortcut "ETF minus SPY".</div></div>
+        <div><div class="ptitle">Cumulative return, split into parts</div><div class="psub">The market and factor parts compound to the ETF's total. The dashed line is the shortcut "ETF minus SPY".</div></div>
         <div class="chart" id="cum"></div>
         <div class="legend" id="cumLegend"></div>
       </div>
@@ -293,7 +293,7 @@ footer{padding-block:48px 64px;color:var(--muted);font-size:13px;display:grid;ga
     <div class="card"><h3>One day can own a window</h3><p>Correlation is driven by the biggest days. A single 5-sigma session can set a 63-day correlation by itself, then vanish 63 days later. When a line jumps up, goes flat, and drops off a cliff, look for the event that started it.</p></div>
     <div class="card"><h3>Correlation is not a hedge ratio</h3><p>Two residuals can be 0.8 correlated with very different volatilities. Correlation says whether two things move together, not by how much. For sizing, use beta or vol-scaled weights.</p></div>
     <div class="card"><h3>One market factor only</h3><p>This strips out SPY and nothing else. For bonds, gold and oil, SPY explains little, so their residual is close to their raw return. A full factor model would add rates, dollar and commodity factors.</p></div>
-    <div class="card"><h3>How the math runs</h3><p>Log returns. Beta and alpha from an OLS of each ETF on SPY over the trailing window, ending on the day itself, as in the source notebook. Residual = return − (α + β × SPY). Correlations are Pearson over the chosen lookback.</p></div>
+    <div class="card"><h3>How the math runs</h3><p>Log returns. Beta and alpha from an OLS of each ETF on SPY over the trailing window, ending on the day itself, as in the source notebook. Factor return = return − β × SPY: what a position long the ETF and short β of SPY earned, alpha included. (The source notebook also subtracts the window's alpha; that strips out persistent trends, so it isn't used here.) Correlations are Pearson over the chosen lookback.</p></div>
   </div>
 </section>
 
@@ -348,7 +348,7 @@ function getRes(w){
       if (i>=w){ const xo=M[i-w], vo=y[i-w]; sx-=xo; sy-=vo; sxx-=xo*xo; sxy-=xo*vo; }
       if (i>=w-1){
         const mx=sx/w, my=sy/w, cov=sxy-w*mx*my, vr=sxx-w*mx*mx, bb=cov/vr, a=my-bb*mx;
-        b[i]=bb; r[i]=v-(a+bb*x);
+        b[i]=bb; r[i]=v-bb*x;
       }
     }
     res[t]=r; beta[t]=b;
