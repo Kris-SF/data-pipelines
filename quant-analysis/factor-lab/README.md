@@ -11,14 +11,21 @@ Lessons on the page:
    "21d − 252d" change mode.
 4. **Short vs long lookbacks**: rolling 21/63/252-day correlation for any pair, plus a list of the
    pairs whose short-window correlation has broken furthest from the long-window value.
-5. **Regime**: average pairwise correlation within sectors, style factors and international.
+5. **Regime**: average pairwise correlation within sectors, style factors and international, plus
+   rotation intensity (vol of the value-minus-growth residual spread against SPY vol).
+6. **Beyond equities**: raw rolling stock/bond/gold correlations, and the international residual
+   correlation set against the dollar's trend (UUP).
+
+Also: a percentile heatmap mode ("unusual for the pair"), an out-of-sample beta health check, and
+a flag on scoreboard z-scores whose vol window holds an extreme day.
 
 The beta window (21/63/126/252) in the sticky bar drives every residual on the page.
 
 ## Data
 
 Moontower EOD closes from BigQuery `moontower-rwjs.lake.eod_price` (`data_source = 1`), from
-2023-11-01 onward, for 36 ETFs. Known fix-up: in source 1, XLB/XLY/XLE/XLK closes for 2024-11-01
+2023-11-01 onward, for 37 ETFs (including UUP). Rebuild with `python prep_data.py <bq_result.json>`
+then `python build.py`. Known fix-up: in source 1, XLB/XLY/XLE/XLK closes for 2024-11-01
 through 2024-11-29 are not split-adjusted (2× the rest of the series). `data.json` divides
 those closes by 2. Missing days are forward-filled, which gives a 0 return on those days.
 
@@ -31,7 +38,7 @@ WITH px AS (
   WHERE p.trade_date BETWEEN '2022-10-01' AND CURRENT_DATE() AND p.data_source = 1
     AND t.ticker IN ('SPY','MTUM','VTV','VUG','IWM','IJR','VYM','SCHD','RSP','QQQ','ARKK',
                      'XLK','XLF','XLE','XLV','XLI','XLY','XLP','XLU','XLB','XLRE','XLC','SMH','KRE',
-                     'EFA','EEM','EWJ','EWZ','FXI','TLT','IEF','HYG','GLD','SLV','USO','VNQ')
+                     'EFA','EEM','EWJ','EWZ','FXI','TLT','IEF','HYG','GLD','SLV','USO','VNQ','UUP')
   GROUP BY 1, 2),
 cal AS (SELECT DISTINCT d FROM px WHERE ticker = 'SPY'),
 grid AS (SELECT tk.ticker, cal.d FROM cal CROSS JOIN (SELECT DISTINCT ticker FROM px) tk)

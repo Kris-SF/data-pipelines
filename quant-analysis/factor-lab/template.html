@@ -127,6 +127,15 @@ input[type=range]{width:min(420px,100%);accent-color:var(--purple)}
 #tip .r{display:flex;justify-content:space-between;gap:12px;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 #tip .r span:first-child{font-family:var(--f-body);color:var(--ink-2)}
 #tip .sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.flag{color:var(--amber);cursor:help;margin-left:4px;font-family:var(--f-body)}
+.status{display:inline-block;border-radius:999px;padding:1px 9px;font-family:var(--f-body);font-size:12px}
+.st-ok{background:var(--surface-2);color:var(--muted)}
+.st-low{background:color-mix(in srgb,var(--purple) 18%,transparent);color:var(--ink)}
+.st-high{background:color-mix(in srgb,var(--rose) 20%,transparent);color:var(--ink)}
+.st-unst{background:color-mix(in srgb,var(--amber) 22%,transparent);color:var(--ink)}
+.morebtn{justify-self:start;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer}
+.morebtn:hover{border-color:var(--purple)}
+.foot{font-size:12.5px;color:var(--muted)}
 footer{padding-block:48px 64px;color:var(--muted);font-size:13px;display:grid;gap:8px;max-width:80ch}
 .next{display:grid;gap:8px}
 .next li{color:var(--ink-2)}
@@ -137,7 +146,7 @@ footer{padding-block:48px 64px;color:var(--muted);font-size:13px;display:grid;ga
 
 <header class="wrap hero">
   <h1>Factor <em>Lab</em></h1>
-  <p class="lede">Every ETF's daily move is part market, part something else. Take the market out and what's left is the <b>factor</b>: momentum, value, a sector, a country. This lab lets you strip the market out of 35 ETFs, watch which factors are working, and see how their correlations shift over short and long lookbacks.</p>
+  <p class="lede">Every ETF's daily move is part market, part something else. Take the market out and what's left is the <b>factor</b>: momentum, value, a sector, a country. This lab lets you strip the market out of 36 ETFs, watch which factors are working, and see how their correlations shift over short and long lookbacks.</p>
   <div class="formula" aria-label="Decomposition formula">
     <span><b>r<sub>ETF</sub></b></span><span>=</span><span class="m"><b>β × r<sub>SPY</sub></b></span><span>+</span><span class="f"><b>residual</b></span>
     <small>β (beta) is how many dollars of SPY move with each dollar of the ETF, measured over a trailing window. The residual is the factor return: what the ETF did beyond what its beta to the market predicted.</small>
@@ -185,6 +194,12 @@ footer{padding-block:48px 64px;color:var(--muted);font-size:13px;display:grid;ga
   <p class="intro">The return of each ETF after removing its market beta, so the numbers show the factor alone. <b>Today z</b> scales the latest residual by its own recent volatility: ±2 is a big day for that factor, ±3 is rare. Click a column to sort, or a row to open it in lessons 01 and 04.</p>
   <div class="panel">
     <div class="tablewrap"><table id="board"><thead></thead><tbody></tbody></table></div>
+    <p class="foot"><span class="flag" style="margin:0">⚑</span> The 63-day window behind this z-score holds an extreme day. That day inflates the factor's measured vol, so z-scores read low until it rolls out. Hover the flag for the date it exits.</p>
+  </div>
+  <div class="panel">
+    <div><div class="ptitle">Beta health check</div><div class="psub">Inside its own window a residual is uncorrelated with SPY by construction, so that tells you nothing. The test is out of sample: hedge each day with the beta measured through the day before, then see if the leftover still moves with SPY. Persistently positive means the beta is too low or stale. Persistently negative means it is too high.</div></div>
+    <div class="tablewrap"><table id="health" style="min-width:640px"><thead></thead><tbody></tbody></table></div>
+    <button type="button" class="morebtn" id="healthMore"></button>
   </div>
 </section>
 
@@ -238,10 +253,38 @@ footer{padding-block:48px 64px;color:var(--muted);font-size:13px;display:grid;ga
     <div class="legend" id="dispLegend"></div>
     <p class="callout" id="dNote"></p>
   </div>
+  <div class="panel">
+    <div><div class="ptitle">Rotation intensity: value vs growth</div><div class="psub">Value and growth residuals sit near −1 correlation by arithmetic, so their correlation says little. The volatility of the spread between them is the real read: high means money is rotating hard between the two styles. Plotted against SPY's own volatility, same units.</div></div>
+    <div class="controls"><label>Vol window <span class="seg" id="rotWin"></span></label></div>
+    <div class="stats" id="rotStats"></div>
+    <div class="chart" id="rot"></div>
+    <div class="legend" id="rotLegend"></div>
+    <p class="callout" id="rotNote"></p>
+  </div>
+</section>
+
+<section class="lesson" id="crossasset">
+  <div class="eyebrow">06 · Beyond equities</div>
+  <h2>Stocks, bonds, gold and the dollar</h2>
+  <p class="intro">For bonds, gold and oil, beta to SPY is small and jumps around, so their residuals add little. Here the raw correlations are the story: when stocks and bonds start falling together, the classic 60/40 hedge stops working.</p>
+  <div class="panel">
+    <div class="controls"><label>Lookback <span class="seg" id="xaWin"></span></label></div>
+    <div class="stats" id="xaStats"></div>
+    <div class="chart" id="xa"></div>
+    <div class="legend" id="xaLegend"></div>
+    <p class="callout" id="xaNote"></p>
+  </div>
+  <div class="panel">
+    <div><div class="ptitle">Does the dollar drive the international factor?</div><div class="psub">Top: how much the five international ETFs move together after removing SPY (63-day average pairwise residual correlation). Bottom: the dollar's trailing 63-day return, using UUP. If the top line rises when the dollar trends, a dollar factor is hiding inside the "international" residuals.</div></div>
+    <div class="stats" id="fxStats"></div>
+    <div class="chart" id="fxTop"></div>
+    <div class="chart" id="fxBot"></div>
+    <p class="callout" id="fxNote"></p>
+  </div>
 </section>
 
 <section class="lesson" id="primer">
-  <div class="eyebrow">06 · Field notes</div>
+  <div class="eyebrow">07 · Field notes</div>
   <h2>What to keep in mind</h2>
   <div class="primer">
     <div class="card"><h3>Why not just subtract SPY?</h3><p>"MTUM minus SPY" assumes a beta of exactly 1. Low-vol and dividend funds run nearer 0.7, small caps and semis well above 1. The leftover market exposure leaks into every spread, so naive factor spreads all look correlated with each other. Lesson 01 shows the gap.</p></div>
@@ -255,7 +298,7 @@ footer{padding-block:48px 64px;color:var(--muted);font-size:13px;display:grid;ga
 </section>
 
 <footer>
-  <div><b style="color:var(--ink-2)">Data:</b> Moontower end-of-day closes, <span id="range"></span>, <span id="nDays"></span> trading days, 36 ETFs. Based on the beta-adjusted residual method in <span class="mono">data-pipelines/quant-analysis/factor_residual_correlations.ipynb</span>.</div>
+  <div><b style="color:var(--ink-2)">Data:</b> Moontower end-of-day closes, <span id="range"></span>, <span id="nDays"></span> trading days, 37 ETFs. Based on the beta-adjusted residual method in <span class="mono">data-pipelines/quant-analysis/factor_residual_correlations.ipynb</span>.</div>
   <div>For research and learning. Not investment advice.</div>
 </footer>
 </main>
@@ -277,7 +320,7 @@ const META = {
   EFA:["Developed ex-US","International"], EEM:["Emerging markets","International"], EWJ:["Japan","International"],
   EWZ:["Brazil","International"], FXI:["China large-cap","International"],
   TLT:["Long Treasuries","Macro"], IEF:["7–10y Treasuries","Macro"], HYG:["High-yield credit","Macro"],
-  GLD:["Gold","Macro"], SLV:["Silver","Macro"], USO:["Crude oil","Macro"], VNQ:["REITs","Macro"]
+  GLD:["Gold","Macro"], SLV:["Silver","Macro"], USO:["Crude oil","Macro"], VNQ:["REITs","Macro"], UUP:["US dollar","Macro"]
 };
 const GROUP_ORDER = ["Style","Theme","Sector","International","Macro"];
 const GROUP_LABEL = {Style:"Style factors",Theme:"Themes & industries",Sector:"US sectors",International:"International",Macro:"Rates, credit & commodities"};
@@ -289,7 +332,7 @@ const M = RET.SPY;
 
 /* ---------- state ---------- */
 const S = { hedge:63, exT:"MTUM", exRange:252, hmMode:"res", hmWin:63, hmSet:"core", hmIdx:N-1,
-            pA:"MTUM", pB:"VUG", pSrc:"res", dSrc:"res", dWin:63, sortKey:null, sortDir:-1 };
+            pA:"MTUM", pB:"VUG", pSrc:"res", dSrc:"res", dWin:63, sortKey:null, sortDir:-1, rotWin:21, xaWin:63, healthAll:false };
 try{ const saved = JSON.parse(localStorage.getItem("factorlab")||"{}"); if (saved.hedge) S.hedge = saved.hedge; }catch(e){}
 
 /* ---------- math ---------- */
@@ -333,6 +376,13 @@ function corrAt(a,b,end,w){
 function sumRange(a,i0,i1){ let s=0; for(let i=i0;i<=i1;i++){ if(!Number.isNaN(a[i])) s+=a[i]; } return s; }
 function stdRange(a,i0,i1){ let s=0,ss=0,n=0; for(let i=i0;i<=i1;i++){ const v=a[i]; if(Number.isNaN(v)) continue; s+=v;ss+=v*v;n++; } const m=s/n; return Math.sqrt((ss-n*m*m)/(n-1)); }
 function firstValid(a){ for(let i=0;i<N;i++) if(!Number.isNaN(a[i])) return i; return N; }
+const pairCache={};
+function pairSeries(tk,R,w,key){ if(pairCache[key]) return pairCache[key]; const o={}; for(let i=0;i<tk.length;i++) for(let j=i+1;j<tk.length;j++) o[i+","+j]=rollCorr(R[tk[i]],R[tk[j]],w); return pairCache[key]=o; }
+function pctAt(c,end){ const v=c[end]; let below=0,n=0,lo=Infinity,hi=-Infinity; for(let k=0;k<=end;k++){ const x=c[k]; if(!Number.isFinite(x)) continue; n++; if(x<=v) below++; if(x<lo)lo=x; if(x>hi)hi=x; } return {v,p:n?below/n:NaN,lo,hi,n}; }
+function rollStd(a,w){ const out=new Float64Array(N).fill(NaN); let s=0,ss=0,n=0; for(let i=0;i<N;i++){ const x=a[i]; if(Number.isNaN(x)){s=ss=0;n=0;continue;} s+=x;ss+=x*x;n++; if(n>w){const o=a[i-w];s-=o;ss-=o*o;n=w;} if(n===w) out[i]=Math.sqrt(Math.max(0,(ss-s*s/w)/(w-1))); } return out; }
+function rollSum(a,w){ const out=new Float64Array(N).fill(NaN); let s=0; for(let i=0;i<N;i++){ s+=a[i]; if(i>=w) s-=a[i-w]; if(i>=w-1) out[i]=s; } return out; }
+function addBizDays(d,k){ const x=new Date(d); while(k>0){ x.setUTCDate(x.getUTCDate()+1); const g=x.getUTCDay(); if(g!==0&&g!==6) k--; } return x; }
+function pctRank(arr,i0,end,v){ let b=0,n=0; for(let k=i0;k<=end;k++){ const x=arr[k]; if(!Number.isFinite(x)) continue; n++; if(x<=v) b++; } return n?b/n:NaN; }
 
 /* ---------- formatting ---------- */
 const fmtPct=(x,d=1)=>Number.isFinite(x)?(x>0?"+":x<0?"−":"")+Math.abs(x*100).toFixed(d)+"%":"–";
@@ -463,6 +513,9 @@ const COLS=[["t","ETF"],["n","Factor"],["beta","Beta"],["z","Today z"],["r5","1W
 function renderBoard(){
   const {res,beta}=getRes(S.hedge), end=N-1;
   const rows=TICKERS.map(t=>{ const r=res[t]; const sd=stdRange(r,end-62,end); const o={t,g:META[t][1],n:name(t),beta:beta[t][end],z:r[end]/sd};
+    { const ab=[]; for(let i=end-62;i<end;i++) ab.push(Math.abs(r[i])); const med=[...ab].sort((x,y)=>x-y)[ab.length>>1]*1.4826; let bi=-1,bv=0;
+      for(let i=end-62;i<end;i++){ const a=Math.abs(r[i]); if(a>5*med && a>bv){bv=a;bi=i;} }
+      if(bi>=0){ const left=63-(end-bi); o.flag={i:bi,v:r[bi],left,exit:addBizDays(DATES[end],left),sdEx:(()=>{let s=0,ss=0,k=0; for(let i=end-62;i<=end;i++){ if(i===bi) continue; s+=r[i];ss+=r[i]*r[i];k++;} return Math.sqrt((ss-s*s/k)/(k-1));})()}; o.zEx=r[end]/o.flag.sdEx; } }
     for(const k of [5,21,63,252]) o["r"+k]=Math.exp(sumRange(r,end-k+1,end))-1; return o; });
   const thead=document.querySelector("#board thead"), tbody=document.querySelector("#board tbody");
   thead.innerHTML="<tr>"+COLS.map(([k,l])=>`<th data-k="${k}" class="${S.sortKey===k?"sorted":""}" ${k==="spark"?'style="cursor:default"':""}>${l}${S.sortKey===k?(S.sortDir>0?" ↑":" ↓"):""}</th>`).join("")+"</tr>";
@@ -470,26 +523,33 @@ function renderBoard(){
   const P=tok("--purple"), mu=tok("--muted");
   const spark=t=>{ const r=res[t], i0=end-63, pts=[]; let c=0, lo=0, hi=0; for(let i=i0;i<=end;i++){ if(i>i0)c+=r[i]; pts.push(c); lo=Math.min(lo,c); hi=Math.max(hi,c);} const W=96,H=22, sc=v=>H-2-(v-lo)/((hi-lo)||1)*(H-4);
     return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="vertical-align:middle"><line x1="0" x2="${W}" y1="${sc(0)}" y2="${sc(0)}" stroke="${mu}" stroke-width="1" opacity=".35"/><path d="${pts.map((v,i)=>(i?"L":"M")+(i/(pts.length-1)*W).toFixed(1)+","+sc(v).toFixed(1)).join("")}" fill="none" stroke="${P}" stroke-width="1.6"/><circle cx="${W}" cy="${sc(pts[pts.length-1])}" r="2.2" fill="${P}"/></svg>`; };
-  const cell=o=>{ const az=Math.abs(o.z); return `<tr class="row" data-t="${o.t}"><td><b>${o.t}</b></td><td>${o.n}</td><td>${fmtN(o.beta)}</td><td><span class="zpill ${az>=3?"zhot":az>=2?"zwarm":""} ${cls(o.z)}">${fmtN(o.z,1)}</span></td>`+
+  const cell=o=>{ const az=Math.abs(o.z); return `<tr class="row" data-t="${o.t}"><td><b>${o.t}</b></td><td>${o.n}</td><td>${fmtN(o.beta)}</td><td>${o.flag?`<span class="flag" data-t="${o.t}" aria-label="Extreme day in window">⚑</span>`:""}<span class="zpill ${az>=3?"zhot":az>=2?"zwarm":""} ${cls(o.z)}">${fmtN(o.z,1)}</span></td>`+
     ["r5","r21","r63","r252"].map(k=>`<td class="${cls(o[k])}">${fmtPct(o[k])}</td>`).join("")+`<td>${spark(o.t)}</td></tr>`; };
   let html="";
   if(!S.sortKey){ for(const g of GROUP_ORDER){ html+=`<tr class="grp"><td colspan="9">${GROUP_LABEL[g]}</td></tr>`+rows.filter(r=>r.g===g).map(cell).join(""); } }
   else { const k=S.sortKey; rows.sort((a,b)=>(typeof a[k]==="string"? a[k].localeCompare(b[k]) : (a[k]-b[k]))*S.sortDir); html=rows.map(cell).join(""); }
   tbody.innerHTML=html;
+  const byT=Object.fromEntries(rows.map(o=>[o.t,o]));
+  tbody.querySelectorAll(".flag").forEach(f=>{ const o=byT[f.dataset.t], F=o.flag;
+    f.addEventListener("pointermove",e=>showTip(e,`<div class="t">${o.t}: extreme day in the vol window</div><div class="r"><span>${fmtD(DATES[F.i])}</span><span>${fmtPct(F.v)}</span></div><div class="r"><span>Today z as shown</span><span>${fmtN(o.z,1)}</span></div><div class="r"><span>z without that day</span><span>${fmtN(o.zEx,1)}</span></div><div class="psub" style="margin-top:4px">Rolls out in ${F.left} trading day${F.left===1?"":"s"}, around ${fmtD(F.exit)}.</div>`));
+    f.addEventListener("pointerleave",hideTip); f.addEventListener("click",e=>e.stopPropagation()); });
   tbody.querySelectorAll("tr.row").forEach(tr=>tr.onclick=()=>{ const t=tr.dataset.t; S.exT=t; if(S.pA!==t) {S.pB=S.pA; S.pA=t;} renderAll(); document.getElementById("decompose").scrollIntoView({behavior:"smooth"}); });
 }
 
 /* ---------- 03 heatmap ---------- */
 const SETS={ core:["Style factors + sectors",["Style","Theme","Sector"]], all:["Everything",GROUP_ORDER], cross:["Factors + cross-asset",["Style","International","Macro"]], sectors:["Sectors only",["Sector"]] };
 function renderHeatmap(){
-  const minIdx = S.hmMode==="diff" ? firstValid(getRes(S.hedge).res.MTUM)+251 : (S.hmMode==="res"? firstValid(getRes(S.hedge).res.MTUM)+S.hmWin-1 : S.hmWin);
+  const fvr=firstValid(getRes(S.hedge).res.MTUM);
+  const minIdx = S.hmMode==="diff" ? fvr+251 : S.hmMode==="pct" ? fvr+S.hmWin-1+125 : S.hmMode==="res" ? fvr+S.hmWin-1 : S.hmWin;
   const slider=document.getElementById("hmDate"); slider.min=minIdx; slider.max=N-1; if(S.hmIdx<minIdx) S.hmIdx=minIdx; slider.value=S.hmIdx;
   document.getElementById("hmDateLab").textContent=fmtD(DATES[S.hmIdx]);
   const tk=TICKERS.filter(t=>SETS[S.hmSet][1].includes(META[t][1]));
   const n=tk.length, R=S.hmMode==="raw"?RET:getRes(S.hedge).res, end=S.hmIdx;
-  const C=[...Array(n)].map(()=>new Float64Array(n));
+  const C=[...Array(n)].map(()=>new Float64Array(n)), K=[...Array(n)].map(()=>new Float64Array(n)), PI=[...Array(n)].map(()=>[]);
+  const ser = S.hmMode==="pct" ? pairSeries(tk,R,S.hmWin,`${S.hedge}|${S.hmWin}|${S.hmSet}`) : null;
   for(let i=0;i<n;i++) for(let j=i;j<n;j++){ let v;
-    if(i===j) v=1; else if(S.hmMode==="diff") v=corrAt(R[tk[i]],R[tk[j]],end,21)-corrAt(R[tk[i]],R[tk[j]],end,252); else v=corrAt(R[tk[i]],R[tk[j]],end,S.hmWin);
+    if(i===j) v=1; else if(S.hmMode==="pct"){ const p=pctAt(ser[i+","+j],end); v=p.p; K[i][j]=K[j][i]=p.v; PI[i][j]=PI[j][i]=p; }
+    else if(S.hmMode==="diff") v=corrAt(R[tk[i]],R[tk[j]],end,21)-corrAt(R[tk[i]],R[tk[j]],end,252); else v=corrAt(R[tk[i]],R[tk[j]],end,S.hmWin);
     C[i][j]=C[j][i]=v; }
   const host=document.getElementById("hm"); host.innerHTML="";
   const W=Math.max(320,host.clientWidth), lab=44, top=44, cs=Math.max(7,Math.min(26,(W-lab-8)/n)), H=top+cs*n+8, Wd=lab+cs*n+8;
@@ -500,19 +560,21 @@ function renderHeatmap(){
     tt=el("text",{x:0,y:0,"font-size":fs,fill:ink2,"font-family":"JetBrains Mono, monospace",transform:`translate(${lab+i*cs+cs/2+fs*0.36},${top-5}) rotate(-90)`},svg); tt.textContent=t; });
   const scale = S.hmMode==="diff"? 1 : 1;
   const g=el("g",{},svg);
-  for(let i=0;i<n;i++) for(let j=0;j<n;j++){ const v=C[i][j]; const t=Math.min(1,Math.abs(v)/scale);
+  for(let i=0;i<n;i++) for(let j=0;j<n;j++){ const v0=C[i][j], v=S.hmMode==="pct"?(v0-0.5)*2:v0; const t=Math.min(1,Math.abs(v)/scale);
     el("rect",{x:lab+j*cs+0.5,y:top+i*cs+0.5,width:cs-1,height:cs-1,rx:Math.min(3,cs/6),fill:i===j?tok("--surface-2"):(v>=0?hexMix(surf,P,t):hexMix(surf,Ro,t)),"data-i":i,"data-j":j},g); }
   // group separators
   let prev=null; tk.forEach((t,i)=>{ const gname=META[t][1]; if(prev&&gname!==prev){ el("line",{x1:lab,x2:lab+n*cs,y1:top+i*cs,y2:top+i*cs,stroke:ink2,"stroke-width":1.2,opacity:.5},svg); el("line",{y1:top,y2:top+n*cs,x1:lab+i*cs,x2:lab+i*cs,stroke:ink2,"stroke-width":1.2,opacity:.5},svg);} prev=gname; });
   g.addEventListener("pointermove",e=>{ const r=e.target; if(r.tagName!=="rect") return; const i=+r.dataset.i,j=+r.dataset.j; if(i===j){hideTip();return;}
     const a=tk[i], b=tk[j]; let html=`<div class="t">${a} × ${b}</div><div class="psub" style="margin-bottom:4px">${name(a)} vs ${name(b)}</div>`;
-    if(S.hmMode==="diff"){ const s=corrAt(R[a],R[b],end,21), l=corrAt(R[a],R[b],end,252); html+=`<div class="r"><span>21-day corr</span><span>${fmtC(s)}</span></div><div class="r"><span>252-day corr</span><span>${fmtC(l)}</span></div><div class="r"><span>Change</span><span>${fmtC(s-l)}</span></div>`; }
+    if(S.hmMode==="pct"){ const p=PI[i][j]; html+=`<div class="r"><span>${S.hmWin}-day residual corr</span><span>${fmtC(p.v)}</span></div><div class="r"><span>Percentile vs its history</span><span>${Math.round(p.p*100)}th</span></div><div class="r"><span>History range</span><span>${fmtC(p.lo)} to ${fmtC(p.hi)}</span></div>`; }
+    else if(S.hmMode==="diff"){ const s=corrAt(R[a],R[b],end,21), l=corrAt(R[a],R[b],end,252); html+=`<div class="r"><span>21-day corr</span><span>${fmtC(s)}</span></div><div class="r"><span>252-day corr</span><span>${fmtC(l)}</span></div><div class="r"><span>Change</span><span>${fmtC(s-l)}</span></div>`; }
     else html+=`<div class="r"><span>${S.hmWin}-day ${S.hmMode==="raw"?"raw":"residual"} corr</span><span>${fmtC(C[i][j])}</span></div>`;
     html+=`<div class="psub" style="margin-top:4px">Click to chart this pair</div>`; showTip(e,html); });
   g.addEventListener("pointerleave",hideTip);
   g.addEventListener("click",e=>{ const r=e.target; if(r.tagName!=="rect") return; const i=+r.dataset.i,j=+r.dataset.j; if(i===j) return; S.pA=tk[i]; S.pB=tk[j]; renderPair(); document.getElementById("lookbacks").scrollIntoView({behavior:"smooth"}); });
   // legend
-  let avg=0,cnt=0; for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){ if(Number.isFinite(C[i][j])){avg+=C[i][j];cnt++;} }
+  let avg=0,cnt=0,ext=0; for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){ if(Number.isFinite(C[i][j])){avg+=C[i][j];cnt++; if(C[i][j]>=0.9||C[i][j]<=0.1) ext++;} }
+  if(S.hmMode==="pct"){ document.getElementById("hmLegend").innerHTML=`<span style="display:inline-flex;align-items:center;gap:8px"><span class="num">0th pct</span><span style="width:140px;height:10px;border-radius:5px;background:linear-gradient(90deg,${Ro},${surf} 50%,${P});border:1px solid var(--line)"></span><span class="num">100th pct</span></span><span><b class="num">${ext}</b> of ${cnt} pairs sit in their top or bottom 10%</span><span>Colour shows where today's ${S.hmWin}-day residual correlation ranks against every earlier reading for that same pair. Bright means unusual for that pair, whatever the level. Rolling windows overlap, so there are far fewer independent readings than days: treat the 90th percentile as a prompt to look, not a signal.</span>`; return; }
   document.getElementById("hmLegend").innerHTML = `<span style="display:inline-flex;align-items:center;gap:8px"><span class="num">${S.hmMode==="diff"?"−1 (decoupled)":"−1"}</span><span style="width:140px;height:10px;border-radius:5px;background:linear-gradient(90deg,${Ro},${surf} 50%,${P});border:1px solid var(--line)"></span><span class="num">${S.hmMode==="diff"?"+1 (converged)":"+1"}</span></span>`+
     `<span>${S.hmMode==="diff"?"Average change":"Average pairwise correlation"}: <b class="num">${fmtC(avg/cnt)}</b></span>`+
     `<span>${S.hmMode==="diff"?"Purple: pairs moving together more this month than over the past year. Rose: pairs that have drifted apart.":S.hmMode==="raw"?"Raw returns include the market, so most cells are purple.":"Residuals have the market removed. What's left is shared factor exposure."}</span>`;
@@ -582,6 +644,74 @@ function renderDispersion(){
     (S.dSrc==="res" ? `Residual correlations are usually near zero or negative: once the market is gone, sectors tend to offset each other. A rise toward zero or above means one theme, such as AI or rates, is driving several sectors at once.` : `Raw correlations are high because every sector shares the market. This is the number index-vol traders track as "implied correlation".`);
 }
 
+/* ---------- beta health ---------- */
+function renderHealth(){
+  const end=N-1, W=63, bH=getRes(S.hedge).beta, b21=getRes(21).beta, b63=getRes(63).beta, b252=getRes(252).beta;
+  const rows=TICKERS.map(t=>{ const y=RET[t], e=new Float64Array(N).fill(NaN);
+    for(let i=1;i<N;i++){ const b=bH[t][i-1]; if(Number.isFinite(b)) e[i]=y[i]-b*M[i]; }
+    const oos=corrAt(e,M,end,W), oos21=corrAt(e,M,end,21);
+    const d=b21[t][end]-b63[t][end], unst=Math.abs(d)>Math.max(0.3,0.3*Math.abs(b63[t][end]));
+    let st="ok",lab="Holding up"; if(oos>0.2){st="low";lab="Beta too low";} else if(oos<-0.2){st="high";lab="Beta too high";}
+    if(unst){ st= st==="ok"?"unst":st; lab = st==="unst"?"Unstable":lab+" · unstable"; }
+    return {t,oos,oos21,d,b21:b21[t][end],b63:b63[t][end],b252:b252[t][end],st,lab,sev:Math.abs(oos)+(unst?0.25:0)}; });
+  rows.sort((a,b)=>b.sev-a.sev);
+  const flagged=rows.filter(r=>r.st!=="ok").length;
+  document.querySelector("#health thead").innerHTML=`<tr><th>ETF</th><th>Factor</th><th>Beta 21d</th><th>Beta 63d</th><th>Beta 252d</th><th>Out-of-sample corr to SPY, 63d</th><th>Same, 21d</th><th style="text-align:left">Status</th></tr>`;
+  const show=S.healthAll?rows:rows.slice(0,Math.max(8,flagged));
+  document.querySelector("#health tbody").innerHTML=show.map(r=>`<tr class="row" data-t="${r.t}"><td><b>${r.t}</b></td><td>${name(r.t)}</td><td>${fmtN(r.b21)}</td><td>${fmtN(r.b63)}</td><td>${fmtN(r.b252)}</td><td class="${Math.abs(r.oos)>0.2?(r.oos>0?"":"neg"):""}">${fmtC(r.oos)}</td><td>${fmtC(r.oos21)}</td><td style="text-align:left"><span class="status st-${r.st}">${r.lab}</span></td></tr>`).join("");
+  document.querySelectorAll("#health tr.row").forEach(tr=>tr.onclick=()=>{S.exT=tr.dataset.t;renderAll();document.getElementById("decompose").scrollIntoView({behavior:"smooth"});});
+  const btn=document.getElementById("healthMore"); btn.textContent=S.healthAll?"Show flagged only":`Show all ${rows.length}`; btn.onclick=()=>{S.healthAll=!S.healthAll;renderHealth();};
+  btn.hidden = rows.length<=show.length && !S.healthAll;
+}
+
+/* ---------- rotation intensity ---------- */
+function renderRotation(){
+  seg("rotWin",[[21,"21d"],[63,"63d"]],()=>S.rotWin,v=>{S.rotWin=v;renderRotation();});
+  const res=getRes(S.hedge).res, sp=new Float64Array(N); for(let i=0;i<N;i++) sp[i]=res.VTV[i]-res.VUG[i];
+  const a=Math.sqrt(252), vs=rollStd(sp,S.rotWin).map(x=>x*a), vm=rollStd(M,S.rotWin).map(x=>x*a);
+  const i0=firstValid(vs), end=N-1, P=tok("--purple"), Nn=tok("--neutral");
+  lineChart(document.getElementById("rot"),{i0,i1:end,height:260,yFmt:(v,full)=>(v*100).toFixed(full?1:0)+"%",series:[
+    {name:"Value − growth residual spread",short:"V−G spread",y:vs,color:P,width:2.25},
+    {name:"SPY",short:"SPY",y:vm,color:Nn,width:1.75}]});
+  document.getElementById("rotLegend").innerHTML=`<span><i style="border-color:${P}"></i>Value − growth residual spread vol</span><span><i style="border-color:${Nn}"></i>SPY vol</span>`;
+  const pr=pctRank(vs,i0,end,vs[end]), ratio=vs[end]/vm[end];
+  document.getElementById("rotStats").innerHTML=[["Spread vol",(vs[end]*100).toFixed(1)+"%",`${Math.round(pr*100)}th percentile of its history`],["SPY vol",(vm[end]*100).toFixed(1)+"%",`${S.rotWin}-day, annualized`],["Spread ÷ SPY",fmtN(ratio),"rotation relative to market moves"]]
+    .map(([k,v,h])=>`<div class="stat"><span class="k">${k}</span><span class="v">${v}</span><span class="h">${h}</span></div>`).join("");
+  document.getElementById("rotNote").innerHTML=`Value vs growth is rotating at <b>${(vs[end]*100).toFixed(1)}%</b> annualized vol, ${pr>0.8?"one of the more intense stretches in this sample":pr<0.2?"one of the quietest stretches in this sample":"in the normal range for this sample"}. `+
+    (ratio>1 ? `The spread is moving more than SPY itself: the index hides a lot of churn underneath, a dispersion setup where styles and single names move more than the index suggests.`
+     : pctRank(vm,i0,end,vm[end])>0.8 ? `SPY's vol is elevated too, so the market is moving and styles are rotating at the same time. Watch for the spread to stay high after SPY calms down: that's when rotation becomes the main story.`
+     : `When the spread's vol runs high while SPY's is calm, the index hides a lot of churn underneath: a dispersion setup, where single names and styles move more than the index suggests.`);
+}
+
+/* ---------- cross-asset ---------- */
+function renderCross(){
+  seg("xaWin",[[21,"21d"],[63,"63d"],[126,"126d"]],()=>S.xaWin,v=>{S.xaWin=v;renderCross();});
+  const w=S.xaWin, end=N-1, P=tok("--purple"), A=tok("--amber"), Ro=tok("--rose");
+  const pairs=[["SPY","TLT","Stocks × bonds",P],["SPY","GLD","Stocks × gold",A],["TLT","GLD","Bonds × gold",Ro]];
+  const ser=pairs.map(([a,b,n,c])=>({name:n,short:n.replace(" × ","×"),y:rollCorr(RET[a],RET[b],w),long:rollCorr(RET[a],RET[b],252),color:c,width:2}));
+  const i0=firstValid(ser[0].y);
+  lineChart(document.getElementById("xa"),{i0,i1:end,height:280,yDomain:[-1,1],yFmt:(v,full)=>full?fmtC(v):v.toFixed(1).replace("-","−"),series:ser});
+  document.getElementById("xaLegend").innerHTML=ser.map(s=>`<span><i style="border-color:${s.color}"></i>${s.name} (raw, ${w}-day)</span>`).join("");
+  document.getElementById("xaStats").innerHTML=ser.map(s=>`<div class="stat"><span class="k">${s.name}</span><span class="v">${fmtC(s.y[end])}</span><span class="h">252-day ${fmtC(s.long[end])}</span></div>`).join("");
+  const sb=ser[0].y[end], big=[...ser].sort((a,b)=>Math.abs(b.y[end]-b.long[end])-Math.abs(a.y[end]-a.long[end]))[0];
+  document.getElementById("xaNote").innerHTML=(sb>0.2?`<b>Stocks and bonds are moving together</b> (${fmtC(sb)}), so Treasuries are not hedging equity risk right now. That is the regime that hurt 60/40 portfolios in 2022. `:sb<-0.2?`<b>Bonds are hedging stocks</b> (${fmtC(sb)}): when equities fall, Treasuries tend to rally. `:`Stocks and bonds are roughly uncorrelated (${fmtC(sb)}), so bonds diversify but don't hedge much. `)+
+    `The biggest move against its yearly level is <b>${big.name.toLowerCase()}</b>: ${fmtC(big.long[end])} over 252 days, ${fmtC(big.y[end])} over ${w}.`;
+}
+function renderDollar(){
+  const res=getRes(S.hedge).res, intl=avgPair(TICKERS.filter(t=>META[t][1]==="International"),res,63), uup=rollSum(RET.UUP,63).map(x=>Math.exp(x)-1);
+  const i0=Math.max(firstValid(intl),firstValid(uup)), end=N-1, Ro=tok("--rose"), A=tok("--amber");
+  lineChart(document.getElementById("fxTop"),{i0,i1:end,height:190,yFmt:(v,full)=>full?fmtC(v):v.toFixed(1).replace("-","−"),series:[{name:"International residual corr (63d)",short:"Intl corr",y:intl,color:Ro,width:2}]});
+  lineChart(document.getElementById("fxBot"),{i0,i1:end,height:170,yFmt:(v,full)=>fmtPct(v,full?1:0),series:[{name:"Dollar, trailing 63-day return (UUP)",short:"Dollar 63d",y:uup,color:A,width:2}]});
+  const corrLv=(()=>{const a=[],b=[]; for(let i=i0;i<=end;i++){ if(Number.isFinite(intl[i])&&Number.isFinite(uup[i])){a.push(intl[i]);b.push(Math.abs(uup[i]));} } const ma=a.reduce((x,y)=>x+y)/a.length, mb=b.reduce((x,y)=>x+y)/b.length; let c=0,va=0,vb=0; for(let k=0;k<a.length;k++){c+=(a[k]-ma)*(b[k]-mb);va+=(a[k]-ma)**2;vb+=(b[k]-mb)**2;} return c/Math.sqrt(va*vb);})();
+  const corrSg=(()=>{const a=[],b=[]; for(let i=i0;i<=end;i++){ if(Number.isFinite(intl[i])&&Number.isFinite(uup[i])){a.push(intl[i]);b.push(uup[i]);} } const ma=a.reduce((x,y)=>x+y)/a.length, mb=b.reduce((x,y)=>x+y)/b.length; let c=0,va=0,vb=0; for(let k=0;k<a.length;k++){c+=(a[k]-ma)*(b[k]-mb);va+=(a[k]-ma)**2;vb+=(b[k]-mb)**2;} return c/Math.sqrt(va*vb);})();
+  const indep=Math.round((end-i0)/63);
+  document.getElementById("fxStats").innerHTML=[["Intl residual corr",fmtC(intl[end]),"63-day, today"],["Dollar, last 63 days",fmtPct(uup[end]),"UUP"],["Link to dollar trend strength",fmtC(corrLv),"corr of the two lines, using |dollar move|"],["Link to dollar direction",fmtC(corrSg),"same, signed dollar move"]]
+    .map(([k,v,h])=>`<div class="stat"><span class="k">${k}</span><span class="v">${v}</span><span class="h">${h}</span></div>`).join("");
+  document.getElementById("fxNote").innerHTML=`Over this sample the international co-movement line has a correlation of <b>${fmtC(corrLv)}</b> with the size of the dollar's trend and <b>${fmtC(corrSg)}</b> with its direction. `+
+    `${Math.abs(corrLv)>0.4||Math.abs(corrSg)>0.4?"That's a meaningful link, which suggests a dollar factor is part of what these residuals share.":"That's a weak link, so the dollar doesn't explain much of why these markets move together."} `+
+    `Both lines are 63-day rolling numbers, so three years holds only about ${indep} independent readings. Treat this as a hint, not proof. A proper test would add UUP as a second regressor next to SPY.`;
+}
+
 /* ---------- try chips ---------- */
 const TRIES=[
   ["Brazil's election shock", ()=>{S.exT="EWZ";S.exRange=63;}, "decompose"],
@@ -591,6 +721,8 @@ const TRIES=[
   ["Gold vs silver", ()=>{S.pA="GLD";S.pB="SLV";S.pSrc="raw";}, "lookbacks"],
   ["What changed this month", ()=>{S.hmMode="diff";S.hmSet="core";S.hmIdx=N-1;}, "heatmap"],
   ["Market off, map on", ()=>{S.hmMode="raw";S.hmWin=63;S.hmIdx=N-1;}, "heatmap"],
+  ["Unusual correlations today", ()=>{S.hmMode="pct";S.hmWin=63;S.hmSet="core";S.hmIdx=N-1;}, "heatmap"],
+  ["Are bonds still a hedge?", ()=>{S.xaWin=63;}, "crossasset"],
 ];
 function renderTries(){ const host=document.getElementById("try");
   TRIES.forEach(([lab,fn,sec])=>{ const b=document.createElement("button"); b.type="button"; b.className="chip"; b.textContent=lab; b.onclick=()=>{fn(); renderAll(); document.getElementById(sec).scrollIntoView({behavior:"smooth"});}; host.appendChild(b); }); }
@@ -599,13 +731,13 @@ function renderTries(){ const host=document.getElementById("try");
 function renderControls(){
   seg("hedgeSeg",[[21,"21d"],[63,"63d"],[126,"126d"],[252,"252d"]],()=>S.hedge,v=>{S.hedge=v; try{localStorage.setItem("factorlab",JSON.stringify({hedge:v}))}catch(e){} renderAll();});
   seg("exRange",[[63,"3M"],[126,"6M"],[252,"1Y"],["all","All"]],()=>S.exRange,v=>{S.exRange=v;renderExplainer();renderControls();});
-  seg("hmMode",[["res","Residual"],["raw","Raw returns"],["diff","Change: 21d − 252d"]],()=>S.hmMode,v=>{S.hmMode=v;renderHeatmap();renderControls();});
+  seg("hmMode",[["res","Residual"],["raw","Raw returns"],["pct","Unusual for the pair"],["diff","Change: 21d − 252d"]],()=>S.hmMode,v=>{S.hmMode=v;renderHeatmap();renderControls();});
   seg("hmWin",[[21,"21d"],[63,"63d"],[126,"126d"],[252,"252d"]],()=>S.hmWin,v=>{S.hmWin=v;renderHeatmap();renderControls();});
   document.getElementById("hmWin").parentElement.style.opacity = S.hmMode==="diff"?.4:1;
   document.querySelectorAll("#hmWin button").forEach(b=>b.disabled=S.hmMode==="diff");
 }
 function renderAll(){ renderControls(); document.getElementById("exTicker").value=S.exT; document.getElementById("hmSet").value=S.hmSet;
-  renderExplainer(); renderBoard(); renderHeatmap(); renderPair(); renderMovers(); renderDispersion(); }
+  renderExplainer(); renderBoard(); renderHealth(); renderHeatmap(); renderPair(); renderMovers(); renderDispersion(); renderRotation(); renderCross(); renderDollar(); }
 
 fillSelect("exTicker",S.exT); fillSelect("pA",S.pA); fillSelect("pB",S.pB);
 { const s=document.getElementById("hmSet"); for(const k in SETS){ const o=document.createElement("option"); o.value=k; o.textContent=SETS[k][0]; s.appendChild(o);} }
